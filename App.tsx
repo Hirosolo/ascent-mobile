@@ -1,9 +1,10 @@
 import 'react-native-gesture-handler';
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, View } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useQueryClient } from '@tanstack/react-query';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AppProviders } from '@/providers/AppProviders';
 import { useAuth } from '@/contexts/AuthContext';
@@ -67,12 +68,30 @@ function AuthNavigator() {
 }
 
 function HomeTabs() {
+  const queryClient = useQueryClient();
+
+  const handleRefreshAll = () => {
+    // Refresh all primary dashboard data domains on demand.
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['workouts'] }),
+      queryClient.invalidateQueries({ queryKey: ['summary'] }),
+      queryClient.invalidateQueries({ queryKey: ['goal'] }),
+      queryClient.invalidateQueries({ queryKey: ['meals'] }),
+      queryClient.invalidateQueries({ queryKey: ['water'] }),
+    ]);
+  };
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: colors.surfaceDark },
         headerTitleStyle: { color: colors.textPrimary, fontWeight: '700' },
         headerTintColor: colors.textPrimary,
+        headerRight: () => (
+          <Pressable onPress={handleRefreshAll} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+            <MaterialCommunityIcons color={colors.primary} name="refresh" size={22} />
+          </Pressable>
+        ),
         tabBarStyle: {
           backgroundColor: colors.surfaceDark,
           borderTopColor: colors.surfaceHighlight,
