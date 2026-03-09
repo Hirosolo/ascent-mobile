@@ -10,8 +10,22 @@ export function getWorkoutById(sessionId: number | string): Promise<WorkoutSessi
   return apiFetch(`/workouts/${sessionId}`);
 }
 
-export function getExercises(): Promise<Exercise[]> {
-  return apiFetch('/exercises');
+export async function getExercises(): Promise<Exercise[]> {
+  const raw = await apiFetch<unknown>('/exercises');
+
+  if (Array.isArray(raw)) {
+    return raw as Exercise[];
+  }
+
+  if (raw && typeof raw === 'object') {
+    const asRecord = raw as Record<string, unknown>;
+    const nested = asRecord.exercises ?? asRecord.items ?? asRecord.data;
+    if (Array.isArray(nested)) {
+      return nested as Exercise[];
+    }
+  }
+
+  return [];
 }
 
 export function createWorkout(payload: {
