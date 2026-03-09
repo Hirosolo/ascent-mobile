@@ -199,6 +199,7 @@ export function WorkoutScreen() {
             <Pressable onPress={() => setCurrentMonth((prev) => addMonths(prev, -1))}>
               <Text style={styles.monthNavText}>Prev</Text>
             </Pressable>
+            <Text style={styles.monthLabel}>{format(currentMonth, 'MMMM yyyy')}</Text>
             <Pressable onPress={() => setCurrentMonth((prev) => addMonths(prev, 1))}>
               <Text style={styles.monthNavText}>Next</Text>
             </Pressable>
@@ -380,7 +381,15 @@ const styles = StyleSheet.create({
   },
   monthNav: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+  },
+  monthLabel: {
+    color: 'rgba(244,244,245,0.7)',
+    fontSize: 12,
+    fontWeight: '600',
+    minWidth: 94,
+    textAlign: 'center',
   },
   monthNavText: {
     color: colors.textPrimary,
@@ -402,8 +411,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   dayCell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
+    width: '14.2857%',
+    height: 46,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
