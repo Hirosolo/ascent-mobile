@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
+import { addMonths, endOfMonth, format, startOfMonth, subDays, addDays } from 'date-fns';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Svg, { Path } from 'react-native-svg';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { getSummary } from '@/services/summary';
-import { createWorkout, getWorkouts } from '@/services/workouts';
+import { addExercisesToWorkout, createWorkout, deleteWorkout, getExercises, getWorkouts } from '@/services/workouts';
 import { colors } from '@/theme/tokens';
-import { WorkoutSession } from '@/types/api';
+import { Exercise, WorkoutSession } from '@/types/api';
 
 type CalendarCell = {
   key: string;
@@ -20,6 +20,13 @@ type CalendarCell = {
 
 const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#A855F7', '#14B8A6', '#64748B'];
 const SESSION_TYPE_OPTIONS = ['Strength', 'Push', 'Pull', 'Legs', 'Cardio', 'Full Body'];
+
+type PlannedExercise = {
+  exercise_id: number;
+  name: string;
+  planned_sets: number;
+  planned_reps: number;
+};
 
 function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
   const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
@@ -43,7 +50,13 @@ export function WorkoutScreen() {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => todayKey);
   const [sessionType, setSessionType] = useState('Strength');
-  const [isSessionTypeOpen, setIsSessionTypeOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
+  const [createDate, setCreateDate] = useState(todayKey);
+  const [createType, setCreateType] = useState('Strength');
+  const [createNote, setCreateNote] = useState('');
+  const [isCreateTypeOpen, setIsCreateTypeOpen] = useState(false);
+  const [plannedExercises, setPlannedExercises] = useState<PlannedExercise[]>([]);
 
   const monthKey = format(currentMonth, 'yyyy-MM');
 
@@ -57,18 +70,40 @@ export function WorkoutScreen() {
     queryFn: () => getSummary(monthKey),
   });
 
+  const exercisesQuery = useQuery({
+    queryKey: ['exercises-master'],
+    queryFn: () => getExercises(),
+    enabled: isCreateModalOpen,
+  });
+
   const createMutation = useMutation({
-    mutationFn: () =>
-      createWorkout({
-        scheduled_date: selectedDate,
-        type: sessionType || 'Strength',
-      }),
+    mutationFn: async () => {
+      const created = await createWorkout({
+        scheduled_date: createDate,
+        type: createType || 'Strength',
+        notes: createNote.trim() || undefined,
+      });
+
+      if (plannedExercises.length > 0) {
+        await addExercisesToWorkout(
+          created.session_id,
+          plannedExercises.map((ex) => ({
+            exercise_id: ex.exercise_id,
+            planned_sets: ex.planned_sets,
+            planned_reps: ex.planned_reps,
+          })),
+        );
+      }
+    },
     onSuccess: () => {
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ['workouts', monthKey] }),
         queryClient.invalidateQueries({ queryKey: ['summary', monthKey] }),
       ]);
-      setIsSessionTypeOpen(false);
+      setIsCreateModalOpen(false);
+      setCreateStep(1);
+      setCreateNote('');
+      setPlannedExercises([]);
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'Failed to create workout';
@@ -135,6 +170,52 @@ export function WorkoutScreen() {
   const selectedSessions = sessionsByDate.get(selectedDate) ?? [];
 
   const muscleSplit = summaryQuery.data?.muscle_split ?? [];
+
+  const deleteSessionMutation = useMutation({
+    mutationFn: (sessionId: number) => deleteWorkout(sessionId),
+    onSuccess: () => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['workouts', monthKey] }),
+        queryClient.invalidateQueries({ queryKey: ['summary', monthKey] }),
+      ]);
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Failed to delete workout session';
+      Alert.alert('Delete Failed', message);
+    },
+  });
+
+  const openCreateModal = () => {
+    setCreateDate(selectedDate);
+    setCreateType(sessionType);
+    setCreateNote('');
+    setCreateStep(1);
+    setPlannedExercises([]);
+    setIsCreateTypeOpen(false);
+    setIsCreateModalOpen(true);
+  };
+
+  const addPlannedExercise = (exercise: Exercise) => {
+    setPlannedExercises((prev) => {
+      if (prev.some((p) => p.exercise_id === exercise.exercise_id)) return prev;
+      return [...prev, { exercise_id: exercise.exercise_id, name: exercise.name, planned_sets: 3, planned_reps: 10 }];
+    });
+  };
+
+  const patchPlannedExercise = (exerciseId: number, patch: Partial<PlannedExercise>) => {
+    setPlannedExercises((prev) => prev.map((item) => (item.exercise_id === exerciseId ? { ...item, ...patch } : item)));
+  };
+
+  const removePlannedExercise = (exerciseId: number) => {
+    setPlannedExercises((prev) => prev.filter((item) => item.exercise_id !== exerciseId));
+  };
+
+  const confirmDeleteSession = (sessionId: number) => {
+    Alert.alert('Delete Session', 'This will permanently delete this workout session.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => deleteSessionMutation.mutate(sessionId) },
+    ]);
+  };
 
   return (
     <Screen scroll contentStyle={styles.screen}>
@@ -240,36 +321,10 @@ export function WorkoutScreen() {
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Quick Create</Text>
-        <Text style={styles.selectLabel}>Session Type</Text>
-        <Pressable
-          onPress={() => setIsSessionTypeOpen((prev) => !prev)}
-          style={styles.selectBox}
-        >
-          <Text style={styles.selectValue}>{sessionType}</Text>
-          <Text style={styles.selectChevron}>{isSessionTypeOpen ? '▲' : '▼'}</Text>
-        </Pressable>
-        {isSessionTypeOpen ? (
-          <View style={styles.selectMenu}>
-            {SESSION_TYPE_OPTIONS.map((option) => {
-              const isActive = option === sessionType;
-              return (
-                <Pressable
-                  key={option}
-                  onPress={() => {
-                    setSessionType(option);
-                    setIsSessionTypeOpen(false);
-                  }}
-                  style={[styles.selectOption, isActive && styles.selectOptionActive]}
-                >
-                  <Text style={[styles.selectOptionText, isActive && styles.selectOptionTextActive]}>{option}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
+        <Text style={styles.mutedInline}>Create a session in steps (details and planned exercises).</Text>
         <PrimaryButton
-          label={createMutation.isPending ? 'CREATING...' : `CREATE FOR ${format(new Date(selectedDate), 'dd MMM').toUpperCase()}`}
-          onPress={() => createMutation.mutate()}
+          label="OPEN CREATE FLOW"
+          onPress={openCreateModal}
           variant="hero"
         />
       </View>
@@ -290,11 +345,141 @@ export function WorkoutScreen() {
                 <Text style={styles.sessionTitle}>{item.type ?? 'Workout Session'}</Text>
                 <Text style={styles.sessionSub}>{item.notes || 'Open details to log sets and reps'}</Text>
               </View>
-              <Text style={[styles.badge, item.status === 'COMPLETED' ? styles.done : styles.progress]}>{item.status}</Text>
+              <View style={styles.sessionActions}>
+                <Text style={[styles.badge, item.status === 'COMPLETED' ? styles.done : styles.progress]}>{item.status}</Text>
+                <Pressable onPress={() => confirmDeleteSession(item.session_id)}>
+                  <Text style={styles.deleteSession}>Delete</Text>
+                </Pressable>
+              </View>
             </Pressable>
           )}
         />
       </View>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={isCreateModalOpen}
+        onRequestClose={() => setIsCreateModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Create Workout Session</Text>
+            <Text style={styles.stepIndicator}>Step {createStep} / 2</Text>
+
+            {createStep === 1 ? (
+              <View style={styles.stepBlock}>
+                <Text style={styles.selectLabel}>Date</Text>
+                <View style={styles.dateRow}>
+                  <Pressable onPress={() => setCreateDate(format(subDays(new Date(createDate), 1), 'yyyy-MM-dd'))}>
+                    <Text style={styles.monthNavText}>Prev Day</Text>
+                  </Pressable>
+                  <Text style={styles.dateValue}>{format(new Date(createDate), 'dd MMM yyyy')}</Text>
+                  <Pressable onPress={() => setCreateDate(format(addDays(new Date(createDate), 1), 'yyyy-MM-dd'))}>
+                    <Text style={styles.monthNavText}>Next Day</Text>
+                  </Pressable>
+                </View>
+
+                <Text style={styles.selectLabel}>Session Type</Text>
+                <Pressable
+                  onPress={() => setIsCreateTypeOpen((prev) => !prev)}
+                  style={styles.selectBox}
+                >
+                  <Text style={styles.selectValue}>{createType}</Text>
+                  <Text style={styles.selectChevron}>{isCreateTypeOpen ? '▲' : '▼'}</Text>
+                </Pressable>
+                {isCreateTypeOpen ? (
+                  <View style={styles.selectMenu}>
+                    {SESSION_TYPE_OPTIONS.map((option) => {
+                      const isActive = option === createType;
+                      return (
+                        <Pressable
+                          key={option}
+                          onPress={() => {
+                            setCreateType(option);
+                            setSessionType(option);
+                            setIsCreateTypeOpen(false);
+                          }}
+                          style={[styles.selectOption, isActive && styles.selectOptionActive]}
+                        >
+                          <Text style={[styles.selectOptionText, isActive && styles.selectOptionTextActive]}>{option}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                <Text style={styles.selectLabel}>Note</Text>
+                <TextInput
+                  value={createNote}
+                  onChangeText={setCreateNote}
+                  placeholder="Optional note for this workout"
+                  placeholderTextColor="rgba(244,244,245,0.35)"
+                  style={styles.noteInput}
+                />
+              </View>
+            ) : (
+              <View style={styles.stepBlock}>
+                <Text style={styles.selectLabel}>Add Planned Exercises</Text>
+                {exercisesQuery.isLoading ? <Text style={styles.mutedInline}>Loading exercises...</Text> : null}
+                {(exercisesQuery.data ?? []).slice(0, 20).map((exercise) => (
+                  <Pressable key={exercise.exercise_id} style={styles.exercisePick} onPress={() => addPlannedExercise(exercise)}>
+                    <Text style={styles.exercisePickText}>{exercise.name}</Text>
+                    <Text style={styles.addSet}>+ Add</Text>
+                  </Pressable>
+                ))}
+
+                {plannedExercises.length > 0 ? (
+                  <View style={styles.plannedList}>
+                    {plannedExercises.map((item) => (
+                      <View key={item.exercise_id} style={styles.plannedRow}>
+                        <Text style={styles.plannedName}>{item.name}</Text>
+                        <TextInput
+                          style={styles.planInput}
+                          keyboardType="numeric"
+                          value={String(item.planned_sets)}
+                          onChangeText={(v) => patchPlannedExercise(item.exercise_id, { planned_sets: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
+                        />
+                        <Text style={styles.inputLabel}>sets</Text>
+                        <TextInput
+                          style={styles.planInput}
+                          keyboardType="numeric"
+                          value={String(item.planned_reps)}
+                          onChangeText={(v) => patchPlannedExercise(item.exercise_id, { planned_reps: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
+                        />
+                        <Text style={styles.inputLabel}>reps</Text>
+                        <Pressable onPress={() => removePlannedExercise(item.exercise_id)}>
+                          <Text style={styles.deleteSet}>Del</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.mutedInline}>No planned exercises selected.</Text>
+                )}
+              </View>
+            )}
+
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => (createStep === 1 ? setIsCreateModalOpen(false) : setCreateStep(1))}>
+                <Text style={styles.monthNavText}>{createStep === 1 ? 'Cancel' : 'Back'}</Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => {
+                  if (createStep === 1) {
+                    setCreateStep(2);
+                    return;
+                  }
+                  createMutation.mutate();
+                }}
+              >
+                <Text style={styles.modalConfirm}>{createStep === 1 ? 'Next' : (createMutation.isPending ? 'Creating...' : 'Create Session')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -423,6 +608,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
+  mutedInline: {
+    color: 'rgba(244,244,245,0.5)',
+    fontSize: 12,
+  },
   splitRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -526,6 +715,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     gap: 8,
   },
+  sessionActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  deleteSession: {
+    color: '#fda4af',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   sessionTitle: {
     color: colors.textPrimary,
     fontWeight: '700',
@@ -551,5 +749,119 @@ const styles = StyleSheet.create({
   progress: {
     color: colors.orange,
     backgroundColor: '#2a1b0f',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.2)',
+    backgroundColor: 'rgba(8,10,14,0.98)',
+    padding: 14,
+    gap: 10,
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  stepIndicator: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  stepBlock: {
+    gap: 8,
+    maxHeight: 420,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dateValue: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.18)',
+    color: colors.textPrimary,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    minHeight: 42,
+  },
+  exercisePick: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244,244,245,0.08)',
+  },
+  exercisePickText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    flex: 1,
+    paddingRight: 8,
+  },
+  plannedList: {
+    marginTop: 8,
+    gap: 8,
+  },
+  plannedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.12)',
+    padding: 8,
+  },
+  plannedName: {
+    color: colors.textPrimary,
+    flex: 1,
+    fontSize: 12,
+  },
+  inputLabel: {
+    color: 'rgba(244,244,245,0.5)',
+    fontSize: 11,
+    width: 30,
+  },
+  deleteSet: {
+    color: '#fda4af',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  addSet: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  planInput: {
+    width: 40,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.18)',
+    color: colors.textPrimary,
+    paddingVertical: 4,
+    textAlign: 'center',
+  },
+  modalActions: {
+    marginTop: 4,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalConfirm: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });
