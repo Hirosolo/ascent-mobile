@@ -119,19 +119,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   successBox: {
-    borderColor: 'rgba(16,185,129,0.45)',
-    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderColor: 'rgba(59,130,246,0.45)',
+    backgroundColor: 'rgba(59,130,246,0.12)',
   },
   errorBox: {
     borderColor: 'rgba(239,68,68,0.45)',
     backgroundColor: 'rgba(239,68,68,0.12)',
   },
   successText: {
-    color: '#86efac',
+    color: '#60a5fa',
     fontSize: 12,
   },
   errorText: {
-    color: '#fda4af',
+    color: '#93c5fd',
     fontSize: 12,
   },
   cta: {

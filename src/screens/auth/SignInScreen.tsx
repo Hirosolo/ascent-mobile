@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   errorText: {
-    color: '#fda4af',
+    color: '#93c5fd',
     fontSize: 12,
   },
   verifyLink: {
