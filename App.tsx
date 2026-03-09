@@ -85,35 +85,35 @@ function HomeTabs() {
         component={WorkoutScreen}
         name="Workout"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="dumbbell" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="run-fast" size={size} />,
         }}
       />
       <Tab.Screen
         component={NutritionScreen}
         name="Nutrition"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="food-apple" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="silverware-fork-knife" size={size} />,
         }}
       />
       <Tab.Screen
         component={SummaryScreen}
         name="Summary"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="chart-line" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="chart-areaspline" size={size} />,
         }}
       />
       <Tab.Screen
         component={ProgramsScreen}
         name="Programs"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="folder-star" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="notebook-edit-outline" size={size} />,
         }}
       />
       <Tab.Screen
         component={ProfileScreen}
         name="Profile"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="account-circle" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="account-star-outline" size={size} />,
         }}
       />
     </Tab.Navigator>

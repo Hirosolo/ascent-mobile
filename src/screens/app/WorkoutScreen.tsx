@@ -3,6 +3,7 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native
 import { useNavigation } from '@react-navigation/native';
 import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Svg, { Circle } from 'react-native-svg';
 import { AppTextInput } from '@/components/ui/AppTextInput';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
@@ -18,11 +19,14 @@ type CalendarCell = {
   currentMonth: boolean;
 };
 
+const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#A855F7', '#14B8A6', '#64748B'];
+
 export function WorkoutScreen() {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
+  const todayKey = format(new Date(), 'yyyy-MM-dd');
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
-  const [selectedDate, setSelectedDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState(() => todayKey);
   const [sessionType, setSessionType] = useState('Strength');
 
   const monthKey = format(currentMonth, 'yyyy-MM');
@@ -95,15 +99,17 @@ export function WorkoutScreen() {
       });
     }
 
+    let nextOffset = 1;
     while (cells.length % 7 !== 0) {
       const nextDate = new Date(end);
-      nextDate.setDate(end.getDate() + (cells.length % 7));
+      nextDate.setDate(end.getDate() + nextOffset);
       cells.push({
         key: `next-${cells.length}`,
         day: nextDate.getDate(),
         date: format(nextDate, 'yyyy-MM-dd'),
         currentMonth: false,
       });
+      nextOffset += 1;
     }
 
     return cells;
@@ -141,15 +147,48 @@ export function WorkoutScreen() {
         {muscleSplit.length === 0 ? (
           <Text style={styles.muted}>No completed sessions for this month yet.</Text>
         ) : (
-          muscleSplit.map((item) => (
-            <View key={item.name} style={styles.splitRow}>
-              <Text style={styles.splitLabel}>{item.name}</Text>
-              <View style={styles.splitTrack}>
-                <View style={[styles.splitFill, { width: `${Math.max(2, Math.min(100, item.value))}%` }]} />
-              </View>
-              <Text style={styles.splitValue}>{Math.round(item.value)}%</Text>
+          <>
+            <View style={styles.pieWrap}>
+              <Svg width={160} height={160} viewBox="0 0 160 160">
+                {(() => {
+                  const radius = 64;
+                  const strokeWidth = 128;
+                  const circumference = 2 * Math.PI * radius;
+                  const total = muscleSplit.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
+                  let offset = 0;
+
+                  return muscleSplit.map((item, idx) => {
+                    const ratio = Math.max(0, item.value) / total;
+                    const segment = circumference * ratio;
+                    const circle = (
+                      <Circle
+                        key={item.name}
+                        cx={80}
+                        cy={80}
+                        r={radius}
+                        fill="transparent"
+                        stroke={PIE_COLORS[idx % PIE_COLORS.length]}
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={`${segment} ${circumference - segment}`}
+                        strokeDashoffset={-offset}
+                        strokeLinecap="butt"
+                        transform="rotate(-90 80 80)"
+                      />
+                    );
+                    offset += segment;
+                    return circle;
+                  });
+                })()}
+              </Svg>
             </View>
-          ))
+            {muscleSplit.map((item, idx) => (
+              <View key={item.name} style={styles.splitRow}>
+                <View style={[styles.legendDot, { backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }]} />
+                <Text style={styles.splitLabel}>{item.name}</Text>
+                <Text style={styles.splitValue}>{Math.round(item.value)}%</Text>
+              </View>
+            ))}
+          </>
         )}
       </View>
 
@@ -167,15 +206,15 @@ export function WorkoutScreen() {
         </View>
 
         <View style={styles.weekRow}>
-          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => (
+          {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => (
             <Text key={d} style={styles.weekCell}>{d}</Text>
           ))}
         </View>
 
         <View style={styles.calendarGrid}>
           {calendarCells.map((cell) => {
-            const hasSessions = (sessionsByDate.get(cell.date)?.length ?? 0) > 0;
             const isSelected = selectedDate === cell.date;
+            const isToday = cell.date === todayKey;
             return (
               <Pressable
                 key={cell.key}
@@ -183,7 +222,7 @@ export function WorkoutScreen() {
                 style={[styles.dayCell, isSelected && styles.daySelected]}
               >
                 <Text style={[styles.dayText, !cell.currentMonth && styles.dayOut, isSelected && styles.dayTextSelected]}>{cell.day}</Text>
-                {hasSessions ? <View style={styles.dot} /> : null}
+                {isToday ? <View style={styles.dot} /> : null}
               </Pressable>
             );
           })}
@@ -312,24 +351,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  pieWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+  },
   splitLabel: {
-    width: 70,
+    flex: 1,
     color: colors.textPrimary,
     fontSize: 12,
   },
-  splitTrack: {
-    flex: 1,
-    height: 8,
-    backgroundColor: 'rgba(244,244,245,0.12)',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  splitFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-  },
   splitValue: {
-    width: 44,
+    width: 52,
     color: colors.textPrimary,
     textAlign: 'right',
     fontSize: 12,
