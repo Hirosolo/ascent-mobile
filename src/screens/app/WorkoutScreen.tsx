@@ -64,6 +64,7 @@ export function WorkoutScreen() {
   const [isCreateTypeOpen, setIsCreateTypeOpen] = useState(false);
   const [plannedExercises, setPlannedExercises] = useState<PlannedExercise[]>([]);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const monthKey = format(currentMonth, 'yyyy-MM');
 
@@ -265,8 +266,17 @@ export function WorkoutScreen() {
     ]);
   };
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([workoutsQuery.refetch(), summaryQuery.refetch()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
-    <Screen scroll contentStyle={styles.screen}>
+    <Screen scroll contentStyle={styles.screen} refreshing={isRefreshing} onRefresh={handleRefresh}>
       <View style={styles.heroCard}>
         <Text style={styles.kicker}>Ascent Performance</Text>
         <Text style={styles.title}>WORKOUT COMMAND</Text>
