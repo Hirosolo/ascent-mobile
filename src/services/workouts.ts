@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { apiFetch } from '@/lib/api/client';
 import { getSecureItem, SECURE_KEYS } from '@/lib/storage/secure';
 import { invalidateAllSummaryCaches, invalidateSummaryCache } from '@/services/summary';
-import { Exercise, ExerciseLog, WorkoutSession } from '@/types/api';
+import { Exercise, ExerciseLog, WorkoutDayPlan, WorkoutSession } from '@/types/api';
 
 const CACHE_DATE_FORMAT = 'dd-MM-yyyy';
 
@@ -37,6 +37,13 @@ function buildExercisesCacheKeys(userId: string) {
   };
 }
 
+function buildWorkoutDayPlansCacheKeys(userId: string) {
+  return {
+    data: `workout_day_plans_cache_${userId}`,
+    fetched: `workout_day_plans_fetched_${userId}`,
+  };
+}
+
 async function invalidateAllWorkoutCaches(): Promise<void> {
   const userId = await getCacheUserId();
   const allKeys = await AsyncStorage.getAllKeys();
@@ -45,7 +52,9 @@ async function invalidateAllWorkoutCaches(): Promise<void> {
       (key.startsWith('workouts_month_') ||
         key.startsWith('workouts_fetched_') ||
         key.startsWith('exercises_data_') ||
-        key.startsWith('exercises_fetched_')) &&
+        key.startsWith('exercises_fetched_') ||
+        key.startsWith('workout_day_plans_cache_') ||
+        key.startsWith('workout_day_plans_fetched_')) &&
       key.endsWith(`_${userId}`),
   );
 
@@ -134,6 +143,80 @@ export async function getExercises(forceRefresh = false): Promise<Exercise[]> {
   ]);
 
   return resolved;
+}
+
+export async function getWorkoutDayPlans(forceRefresh = false): Promise<WorkoutDayPlan[]> {
+  const userId = await getCacheUserId();
+  const today = getTodayCacheDate();
+  const keys = buildWorkoutDayPlansCacheKeys(userId);
+
+  if (forceRefresh) {
+    await AsyncStorage.multiRemove([keys.data, keys.fetched]);
+  }
+
+  const [cachedDataRaw, fetchedDayRaw] = await AsyncStorage.multiGet([keys.data, keys.fetched]);
+  const cachedData = cachedDataRaw?.[1];
+  const cachedFetchedDay = fetchedDayRaw?.[1];
+
+  if (cachedData && cachedFetchedDay === today) {
+    try {
+      return JSON.parse(cachedData) as WorkoutDayPlan[];
+    } catch {
+      await AsyncStorage.multiRemove([keys.data, keys.fetched]);
+    }
+  }
+
+  const plans = await apiFetch<WorkoutDayPlan[]>('/workout-day-plans');
+  await AsyncStorage.multiSet([
+    [keys.data, JSON.stringify(plans)],
+    [keys.fetched, today],
+  ]);
+  return plans;
+}
+
+async function invalidateWorkoutDayPlansCache(): Promise<void> {
+  const userId = await getCacheUserId();
+  const keys = buildWorkoutDayPlansCacheKeys(userId);
+  await AsyncStorage.multiRemove([keys.data, keys.fetched]);
+}
+
+export async function createWorkoutDayPlan(payload: {
+  name: string;
+  type?: string | null;
+  notes?: string | null;
+  exercises: Array<{ exercise_id: number; planned_sets: number; planned_reps: number; sort_order?: number }>;
+}): Promise<WorkoutDayPlan> {
+  const created = await apiFetch<WorkoutDayPlan>('/workout-day-plans', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  await invalidateWorkoutDayPlansCache();
+  return created;
+}
+
+export async function updateWorkoutDayPlan(
+  planId: number,
+  payload: {
+    name: string;
+    type?: string | null;
+    notes?: string | null;
+    exercises: Array<{ exercise_id: number; planned_sets: number; planned_reps: number; sort_order?: number }>;
+  },
+): Promise<WorkoutDayPlan> {
+  const updated = await apiFetch<WorkoutDayPlan>(`/workout-day-plans/${planId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  await invalidateWorkoutDayPlansCache();
+  return updated;
+}
+
+export async function deleteWorkoutDayPlan(planId: number): Promise<{ plan_id: number }> {
+  const deleted = await apiFetch<{ plan_id: number }>(`/workout-day-plans/${planId}`, {
+    method: 'DELETE',
+  });
+  await invalidateWorkoutDayPlansCache();
+  return deleted;
 }
 
 async function invalidateWorkoutRelatedCaches(month?: string): Promise<void> {
