@@ -8,6 +8,7 @@ import { Screen } from '@/components/ui/Screen';
 import {
   createExerciseLog,
   deleteExerciseLog,
+  deleteWorkout,
   getWorkoutById,
   removeExerciseFromWorkout,
   updateExerciseLog,
@@ -104,6 +105,22 @@ export function WorkoutDetailScreen() {
     },
   });
 
+  const deleteSessionMutation = useMutation({
+    mutationFn: () => deleteWorkout(sessionId),
+    onSuccess: () => {
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['workout-session', sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ['workouts'] }),
+        queryClient.invalidateQueries({ queryKey: ['summary'] }),
+      ]);
+      navigation.goBack();
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Failed to delete workout session';
+      Alert.alert('Delete Failed', message);
+    },
+  });
+
   const initializedSets = useMemo(() => {
     const details = sessionQuery.data?.session_details ?? [];
     const nextState: Record<number, EditableSet[]> = {};
@@ -170,7 +187,6 @@ export function WorkoutDetailScreen() {
   };
 
   const addSet = (detailId: number) => {
-    if (isSessionCompleted) return;
     setSetState((prev) => {
       const source = prev[detailId] ?? initializedSets[detailId] ?? [];
       const newSet: EditableSet = {
@@ -220,13 +236,27 @@ export function WorkoutDetailScreen() {
     }
   };
 
+  const confirmDeleteSession = () => {
+    Alert.alert('Delete Session', 'This will permanently delete this workout session.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: deleteSessionMutation.isPending ? 'Deleting...' : 'Delete', style: 'destructive', onPress: () => deleteSessionMutation.mutate() },
+    ]);
+  };
+
   return (
     <Screen scroll contentStyle={styles.screen}>
       <View style={styles.heroCard}>
-        <Text style={styles.kicker}>Session Detail</Text>
-        <Text style={styles.title}>{session.type || 'Workout Session'}</Text>
-        <Text style={styles.subtitle}>{format(new Date(session.scheduled_date), 'EEEE, dd MMM yyyy')}</Text>
-        <Text style={styles.status}>Status: {session.status}</Text>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroCopy}>
+            <Text style={styles.kicker}>Active Session</Text>
+            <Text style={styles.title}>{session.type || 'Workout Session'}</Text>
+            <Text style={styles.subtitle}>{format(new Date(session.scheduled_date), 'EEEE, dd MMM yyyy')}</Text>
+            <Text style={styles.status}>Status: {session.status}</Text>
+          </View>
+          <Pressable style={styles.deleteSessionBtn} onPress={confirmDeleteSession}>
+            <Text style={styles.deleteSessionBtnText}>{deleteSessionMutation.isPending ? 'Deleting...' : 'Delete Session'}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {sessionDetails.length === 0 ? <Text style={styles.muted}>No exercises yet in this session.</Text> : null}
@@ -242,26 +272,26 @@ export function WorkoutDetailScreen() {
                 <Text style={styles.exerciseName}>{detail.exercises?.name ?? `Exercise #${detail.exercise_id}`}</Text>
                 <Text style={styles.exerciseMeta}>{detail.exercises?.category || 'General'} {isCardio ? '• Cardio' : '• Strength'}</Text>
               </View>
-              <Pressable onPress={() => void removeExercise(detail)} disabled={isSessionCompleted}>
-                <Text style={[styles.deleteText, isSessionCompleted && styles.disabledText]}>Remove</Text>
-              </Pressable>
+              {!isSessionCompleted ? (
+                <Pressable onPress={() => void removeExercise(detail)}>
+                  <Text style={styles.deleteText}>Remove</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
+            <View style={styles.setColumnHeader}>
+              <Text style={styles.setColLabel}>SET</Text>
+              <Text style={[styles.setColLabel, { flex: 1, textAlign: 'center' }]}>WEIGHT</Text>
+              <Text style={[styles.setColLabel, { flex: 1, textAlign: 'center' }]}>REPS</Text>
+              <Text style={[styles.setColLabel, { width: 34, textAlign: 'center' }]}>✓</Text>
             </View>
 
             {sets.map((set, index) => (
-              <View key={set.key} style={styles.setRow}>
+              <View key={set.key} style={[styles.setRow, set.completed && styles.setRowCompleted]}>
                 <Text style={styles.setIndex}>S{index + 1}</Text>
 
                 {!isCardio ? (
                   <>
-                    <TextInput
-                      editable={!isSessionCompleted}
-                      keyboardType="numeric"
-                      onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { reps: v.replace(/[^0-9]/g, '') })}
-                      style={styles.input}
-                      value={set.reps}
-                    />
-                    <Text style={styles.inputLabel}>reps</Text>
-
                     <TextInput
                       editable={!isSessionCompleted}
                       keyboardType="numeric"
@@ -270,6 +300,15 @@ export function WorkoutDetailScreen() {
                       value={set.weight}
                     />
                     <Text style={styles.inputLabel}>kg</Text>
+
+                    <TextInput
+                      editable={!isSessionCompleted}
+                      keyboardType="numeric"
+                      onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { reps: v.replace(/[^0-9]/g, '') })}
+                      style={styles.input}
+                      value={set.reps}
+                    />
+                    <Text style={styles.inputLabel}>reps</Text>
                   </>
                 ) : (
                   <>
@@ -286,22 +325,21 @@ export function WorkoutDetailScreen() {
 
                 <Pressable
                   onPress={() => patchSet(detail.session_detail_id, set.key, { completed: !set.completed })}
-                  style={[styles.checkButton, set.completed && styles.checkButtonDone]}
+                  style={[styles.checkCircle, set.completed && styles.checkCircleDone]}
                   disabled={isSessionCompleted}
                 >
-                  <View style={[styles.checkbox, set.completed && styles.checkboxDone]}>
-                    {set.completed ? <Text style={styles.checkboxTick}>✓</Text> : null}
-                  </View>
-                  <Text style={styles.checkLabel}>Done</Text>
+                  {set.completed ? <Text style={styles.checkCircleTick}>✓</Text> : null}
                 </Pressable>
 
-                <Pressable onPress={() => void removeSet(detail.session_detail_id, set)} disabled={isSessionCompleted}>
-                  <Text style={styles.deleteSet}>Del</Text>
-                </Pressable>
+                {!isSessionCompleted ? (
+                  <Pressable onPress={() => void removeSet(detail.session_detail_id, set)}>
+                    <Text style={styles.deleteSet}>Del</Text>
+                  </Pressable>
+                ) : null}
               </View>
             ))}
 
-            <Pressable onPress={() => addSet(detail.session_detail_id)} disabled={isSessionCompleted}>
+            <Pressable onPress={() => addSet(detail.session_detail_id)}>
               <Text style={styles.addSet}>+ Add Set</Text>
             </Pressable>
           </View>
@@ -311,11 +349,11 @@ export function WorkoutDetailScreen() {
       {isSessionCompleted ? (
         <View style={styles.missionCard}>
           <Text style={styles.missionTitle}>Mission Accomplished</Text>
-          <Text style={styles.missionText}>Workout session completed. Editing is locked.</Text>
+          <Text style={styles.missionText}>Workout session completed. Editing is now locked.</Text>
         </View>
       ) : (
         <PrimaryButton
-          label={saveMutation.isPending ? 'SAVING...' : 'SAVE WORKOUT CHANGES'}
+          label={saveMutation.isPending ? 'SYNCING...' : 'FINISH SESSION'}
           onPress={() => saveMutation.mutate()}
           variant="hero"
         />
@@ -333,10 +371,19 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.38)',
-    backgroundColor: 'rgba(8,10,14,0.95)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
     padding: 16,
     gap: 4,
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  heroCopy: {
+    flex: 1,
   },
   kicker: {
     color: colors.primary,
@@ -358,6 +405,19 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 2,
     fontWeight: '700',
+  },
+  deleteSessionBtn: {
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.35)',
+    backgroundColor: 'rgba(127,29,29,0.28)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  deleteSessionBtnText: {
+    color: '#fca5a5',
+    fontSize: 12,
+    fontWeight: '800',
   },
   muted: {
     color: 'rgba(244,244,245,0.55)',
@@ -390,13 +450,33 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
-  disabledText: {
-    opacity: 0.35,
+  setColumnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingBottom: 4,
+    gap: 6,
+  },
+  setColLabel: {
+    color: 'rgba(244,244,245,0.35)',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    width: 24,
   },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.06)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  setRowCompleted: {
+    opacity: 0.45,
   },
   setIndex: {
     width: 24,
@@ -426,42 +506,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     width: 30,
   },
-  checkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.25)',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    minWidth: 72,
-  },
-  checkButtonDone: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.18)',
-  },
-  checkbox: {
-    width: 14,
-    height: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.5)',
+  checkCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: 'rgba(59,130,246,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxDone: {
-    borderColor: colors.primary,
+  checkCircleDone: {
     backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  checkboxTick: {
+  checkCircleTick: {
     color: '#ffffff',
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '900',
-    lineHeight: 10,
-  },
-  checkLabel: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '700',
   },
   deleteSet: {
     color: colors.red,
