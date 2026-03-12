@@ -1,21 +1,24 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import {
+  addExercisesToWorkout,
   createExerciseLog,
   deleteExerciseLog,
   deleteWorkout,
+  getExercises,
   getWorkoutById,
   removeExerciseFromWorkout,
   updateExerciseLog,
   updateWorkout,
 } from '@/services/workouts';
 import { colors } from '@/theme/tokens';
-import { SessionDetail } from '@/types/api';
+import { Exercise, SessionDetail } from '@/types/api';
 
 type RootStackParams = {
   WorkoutDetail: { sessionId: number };
@@ -42,7 +45,14 @@ export function WorkoutDetailScreen() {
     queryFn: () => getWorkoutById(sessionId),
   });
 
+  const exercisesQuery = useQuery({
+    queryKey: ['exercises-master'],
+    queryFn: () => getExercises(),
+  });
+
   const [setState, setSetState] = useState<Record<number, EditableSet[]>>({});
+  const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false);
+  const [exerciseSearch, setExerciseSearch] = useState('');
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -52,6 +62,13 @@ export function WorkoutDetailScreen() {
       for (const exercise of exercises) {
         const detailId = exercise.session_detail_id;
         const sets = mergedState[detailId] ?? [];
+        const isCardio = (exercise.exercises?.type || '').toLowerCase() === 'cardio';
+
+        if (!isCardio && sets.some((set) => (Number(set.reps) || 0) <= 0)) {
+          throw new Error(
+            `${exercise.exercises?.name ?? 'Exercise'} has a set with reps <= 0. Fix reps before saving.`,
+          );
+        }
 
         for (const set of sets) {
           const reps = Number(set.reps) || 0;
@@ -121,6 +138,23 @@ export function WorkoutDetailScreen() {
     },
   });
 
+  const addExerciseMutation = useMutation({
+    mutationFn: async (exerciseId: number) => {
+      await addExercisesToWorkout(sessionId, [
+        { exercise_id: exerciseId, planned_sets: 1, planned_reps: 10 },
+      ]);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['workout-session', sessionId] });
+      setIsAddExerciseOpen(false);
+      setExerciseSearch('');
+    },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : 'Failed to add exercise';
+      Alert.alert('Add Exercise Failed', message);
+    },
+  });
+
   const initializedSets = useMemo(() => {
     const details = sessionQuery.data?.session_details ?? [];
     const nextState: Record<number, EditableSet[]> = {};
@@ -152,6 +186,51 @@ export function WorkoutDetailScreen() {
     return nextState;
   }, [sessionQuery.data?.session_details]);
 
+  const session = sessionQuery.data;
+  const sessionDetails = session?.session_details ?? [];
+  const isSessionCompleted = session ? session.status === 'COMPLETED' || Boolean(session.completed) : false;
+  const existingExerciseIds = new Set(sessionDetails.map((d) => d.exercise_id));
+
+  const exerciseOptions = useMemo(() => {
+    const list = Array.isArray(exercisesQuery.data) ? exercisesQuery.data : [];
+    const dedup = new Map<number, { exercise_id: number; name: string; category?: string }>();
+
+    list.forEach((item, index) => {
+      const source = item as Exercise & { id?: number; title?: string };
+      const exerciseId = Number(source.exercise_id ?? source.id ?? 0) || index + 1;
+      if (existingExerciseIds.has(exerciseId) || dedup.has(exerciseId)) return;
+
+      dedup.set(exerciseId, {
+        exercise_id: exerciseId,
+        name: source.name ?? source.title ?? `Exercise ${exerciseId}`,
+        category: source.category || 'General',
+      });
+    });
+
+    return Array.from(dedup.values());
+  }, [exercisesQuery.data, existingExerciseIds]);
+
+  const filteredExerciseOptions = useMemo(() => {
+    const query = exerciseSearch.trim().toLowerCase();
+    const filtered = query
+      ? exerciseOptions.filter((item) => item.name.toLowerCase().includes(query))
+      : exerciseOptions;
+
+    const groups = new Map<string, { exercise_id: number; name: string; category?: string }[]>();
+    filtered.forEach((item) => {
+      const key = item.category || 'General';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    });
+
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([category, items]) => ({
+        category,
+        items: items.sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+  }, [exerciseOptions, exerciseSearch]);
+
   if (sessionQuery.isLoading) {
     return (
       <Screen>
@@ -169,9 +248,6 @@ export function WorkoutDetailScreen() {
     );
   }
 
-  const session = sessionQuery.data;
-  const sessionDetails = session.session_details ?? [];
-  const isSessionCompleted = session.status === 'COMPLETED' || Boolean(session.completed);
   // Merge initialized sets with user edits so updating one exercise does not hide others.
   const effectiveState = { ...initializedSets, ...setState };
 
@@ -186,13 +262,22 @@ export function WorkoutDetailScreen() {
     });
   };
 
-  const addSet = (detailId: number) => {
+  const addSet = (detailId: number, isCardio: boolean) => {
+    if (isSessionCompleted) return;
+
     setSetState((prev) => {
       const source = prev[detailId] ?? initializedSets[detailId] ?? [];
+      const reps = Number(source[source.length - 1]?.reps ?? '0');
+
+      if (!isCardio && reps <= 0) {
+        Alert.alert('Invalid Reps', 'Cannot add a new set when reps is 0 or less.');
+        return prev;
+      }
+
       const newSet: EditableSet = {
         key: `${detailId}-new-${Date.now()}`,
         sessionDetailId: detailId,
-        reps: source[source.length - 1]?.reps ?? '0',
+        reps: source[source.length - 1]?.reps ?? '1',
         weight: source[source.length - 1]?.weight ?? '0',
         duration: source[source.length - 1]?.duration ?? '0',
         completed: false,
@@ -280,10 +365,11 @@ export function WorkoutDetailScreen() {
             </View>
 
             <View style={styles.setColumnHeader}>
-              <Text style={styles.setColLabel}>SET</Text>
-              <Text style={[styles.setColLabel, { flex: 1, textAlign: 'center' }]}>WEIGHT</Text>
-              <Text style={[styles.setColLabel, { flex: 1, textAlign: 'center' }]}>REPS</Text>
-              <Text style={[styles.setColLabel, { width: 34, textAlign: 'center' }]}>✓</Text>
+              <Text style={styles.setColLabelSet}>Set</Text>
+              <Text style={styles.setColLabelValue}>Weight</Text>
+              <Text style={styles.setColLabelValue}>{isCardio ? 'Duration' : 'Rep'}</Text>
+              <Text style={styles.setColLabelAction}>Status</Text>
+              <Text style={styles.setColLabelAction}>Action</Text>
             </View>
 
             {sets.map((set, index) => (
@@ -292,59 +378,83 @@ export function WorkoutDetailScreen() {
 
                 {!isCardio ? (
                   <>
-                    <TextInput
-                      editable={!isSessionCompleted}
-                      keyboardType="numeric"
-                      onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { weight: v.replace(/[^0-9.]/g, '') })}
-                      style={styles.input}
-                      value={set.weight}
-                    />
-                    <Text style={styles.inputLabel}>kg</Text>
+                    <View style={styles.valueColumn}>
+                      <TextInput
+                        editable={!isSessionCompleted}
+                        keyboardType="numeric"
+                        onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { weight: v.replace(/[^0-9.]/g, '') })}
+                        style={styles.input}
+                        value={set.weight}
+                      />
+                      <Text style={styles.inputLabel}>kg</Text>
+                    </View>
 
-                    <TextInput
-                      editable={!isSessionCompleted}
-                      keyboardType="numeric"
-                      onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { reps: v.replace(/[^0-9]/g, '') })}
-                      style={styles.input}
-                      value={set.reps}
-                    />
-                    <Text style={styles.inputLabel}>reps</Text>
+                    <View style={styles.valueColumn}>
+                      <TextInput
+                        editable={!isSessionCompleted}
+                        keyboardType="numeric"
+                        onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { reps: v.replace(/[^0-9]/g, '') })}
+                        style={styles.input}
+                        value={set.reps}
+                      />
+                      <Text style={styles.inputLabel}>reps</Text>
+                    </View>
                   </>
                 ) : (
-                  <>
+                  <View style={styles.valueColumn}>
                     <TextInput
                       editable={!isSessionCompleted}
                       keyboardType="numeric"
                       onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { duration: v.replace(/[^0-9]/g, '') })}
-                      style={styles.inputWide}
+                      style={styles.input}
                       value={set.duration}
                     />
                     <Text style={styles.inputLabel}>sec</Text>
-                  </>
+                  </View>
                 )}
 
                 <Pressable
-                  onPress={() => patchSet(detail.session_detail_id, set.key, { completed: !set.completed })}
+                  onPress={() => {
+                    const reps = Number(set.reps) || 0;
+                    if (!isCardio && !set.completed && reps <= 0) {
+                      Alert.alert('Invalid Reps', 'Set reps must be greater than 0 before marking done.');
+                      return;
+                    }
+                    patchSet(detail.session_detail_id, set.key, { completed: !set.completed });
+                  }}
                   style={[styles.checkCircle, set.completed && styles.checkCircleDone]}
                   disabled={isSessionCompleted}
                 >
-                  {set.completed ? <Text style={styles.checkCircleTick}>✓</Text> : null}
+                  <MaterialCommunityIcons
+                    color={set.completed ? '#ffffff' : 'rgba(244,244,245,0.55)'}
+                    name={set.completed ? 'checkbox-marked-circle-outline' : 'checkbox-blank-circle-outline'}
+                    size={18}
+                  />
                 </Pressable>
 
                 {!isSessionCompleted ? (
-                  <Pressable onPress={() => void removeSet(detail.session_detail_id, set)}>
-                    <Text style={styles.deleteSet}>Del</Text>
+                  <Pressable style={styles.deleteSetBtn} onPress={() => void removeSet(detail.session_detail_id, set)}>
+                    <MaterialCommunityIcons color={colors.red} name="trash-can-outline" size={16} />
                   </Pressable>
                 ) : null}
               </View>
             ))}
 
-            <Pressable onPress={() => addSet(detail.session_detail_id)}>
-              <Text style={styles.addSet}>+ Add Set</Text>
-            </Pressable>
+            {!isSessionCompleted ? (
+              <Pressable onPress={() => addSet(detail.session_detail_id, isCardio)}>
+                <Text style={styles.addSet}>+ Add Set</Text>
+              </Pressable>
+            ) : null}
           </View>
         );
       })}
+
+      {!isSessionCompleted ? (
+        <Pressable style={styles.addExerciseBtn} onPress={() => setIsAddExerciseOpen(true)}>
+          <MaterialCommunityIcons color={colors.primary} name="plus" size={16} />
+          <Text style={styles.addExerciseBtnText}>Add Exercise</Text>
+        </Pressable>
+      ) : null}
 
       {isSessionCompleted ? (
         <View style={styles.missionCard}>
@@ -358,6 +468,60 @@ export function WorkoutDetailScreen() {
           variant="hero"
         />
       )}
+
+      <Modal
+        visible={isAddExerciseOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsAddExerciseOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Exercise</Text>
+              <Pressable onPress={() => setIsAddExerciseOpen(false)}>
+                <MaterialCommunityIcons color={colors.textDim} name="close" size={20} />
+              </Pressable>
+            </View>
+
+            <View style={styles.searchWrap}>
+              <MaterialCommunityIcons color={colors.textDim} name="magnify" size={18} />
+              <TextInput
+                value={exerciseSearch}
+                onChangeText={setExerciseSearch}
+                placeholder="Search exercises..."
+                placeholderTextColor={colors.textDim}
+                style={styles.searchInput}
+              />
+            </View>
+
+            <ScrollView style={styles.exerciseList} nestedScrollEnabled>
+              {filteredExerciseOptions.length === 0 && exercisesQuery.isLoading ? (
+                <Text style={styles.modalMuted}>Loading exercises...</Text>
+              ) : null}
+              {filteredExerciseOptions.length === 0 && !exercisesQuery.isLoading ? (
+                <Text style={styles.modalMuted}>No exercises found</Text>
+              ) : null}
+              {filteredExerciseOptions.map((group) => (
+                <View key={group.category}>
+                  <Text style={styles.groupLabel}>{group.category}</Text>
+                  {group.items.map((exercise) => (
+                    <Pressable
+                      key={exercise.exercise_id}
+                      style={styles.exerciseRow}
+                      onPress={() => addExerciseMutation.mutate(exercise.exercise_id)}
+                      disabled={addExerciseMutation.isPending}
+                    >
+                      <Text style={styles.exerciseRowText}>{exercise.name}</Text>
+                      <MaterialCommunityIcons color={colors.primary} name="plus-circle-outline" size={18} />
+                    </Pressable>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -433,7 +597,7 @@ const styles = StyleSheet.create({
   exerciseHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   exerciseName: {
     color: colors.textPrimary,
@@ -453,17 +617,35 @@ const styles = StyleSheet.create({
   setColumnHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
     paddingBottom: 4,
     gap: 6,
   },
-  setColLabel: {
+  setColLabelSet: {
     color: 'rgba(244,244,245,0.35)',
     fontSize: 9,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 1,
     width: 24,
+  },
+  setColLabelValue: {
+    color: 'rgba(244,244,245,0.35)',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    flex: 1,
+    textAlign: 'left',
+  },
+  setColLabelAction: {
+    color: 'rgba(244,244,245,0.35)',
+    fontSize: 9,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    width: 50,
+    textAlign: 'center',
   },
   setRow: {
     flexDirection: 'row',
@@ -483,28 +665,27 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '700',
   },
-  input: {
-    minWidth: 48,
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.18)',
-    color: colors.textPrimary,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    textAlign: 'center',
+  valueColumn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  inputWide: {
-    minWidth: 72,
+  input: {
+    minWidth: 42,
     borderWidth: 1,
     borderColor: 'rgba(244,244,245,0.18)',
     color: colors.textPrimary,
     paddingHorizontal: 8,
     paddingVertical: 6,
     textAlign: 'center',
+    flex: 1,
   },
   inputLabel: {
     color: 'rgba(244,244,245,0.5)',
     fontSize: 11,
     width: 30,
+    textAlign: 'left',
   },
   checkCircle: {
     width: 34,
@@ -519,21 +700,119 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  checkCircleTick: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '900',
-  },
   deleteSet: {
     color: colors.red,
     fontSize: 11,
     fontWeight: '700',
+  },
+  deleteSetBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(127,29,29,0.2)',
   },
   addSet: {
     color: colors.primary,
     fontWeight: '700',
     fontSize: 12,
     marginTop: 2,
+  },
+  addExerciseBtn: {
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.28)',
+    backgroundColor: 'rgba(59,130,246,0.08)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  addExerciseBtnText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#0b0d12',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderTopWidth: 1,
+    borderColor: 'rgba(59,130,246,0.2)',
+    padding: 14,
+    maxHeight: '80%',
+    gap: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.22)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    gap: 8,
+    backgroundColor: 'rgba(5,7,10,0.9)',
+  },
+  searchInput: {
+    color: colors.textPrimary,
+    flex: 1,
+    paddingVertical: 10,
+  },
+  exerciseList: {
+    maxHeight: 380,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.1)',
+    borderRadius: 8,
+  },
+  modalMuted: {
+    color: colors.textDim,
+    paddingVertical: 14,
+    textAlign: 'center',
+  },
+  groupLabel: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  exerciseRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244,244,245,0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  exerciseRowText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
   missionCard: {
     borderWidth: 1,

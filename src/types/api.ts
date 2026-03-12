@@ -12,6 +12,7 @@ export type User = {
   fullname?: string;
   email: string;
   phone?: string;
+  created_at?: string;
 };
 
 export type LoginResponse = {
@@ -106,6 +107,31 @@ export type NutritionGoal = {
   carbs_target_g: number;
   fat_target_g: number;
   hydration_target_ml: number;
+};
+
+export type MetricData = {
+  age: number;
+  sex: 'male' | 'female';
+  height_cm: number;
+  weight_kg: number;
+  activity_level: 'sedentary' | 'light' | 'moderate' | 'heavy' | 'athlete';
+  body_fat_percentage?: number;
+  is_body_fat_estimated?: boolean;
+};
+
+export type GoalCalculationParams = MetricData & {
+  goal_type: 'cutting' | 'lean_bulk' | 'maintain' | 'recomposition';
+  goal_speed: 'slow' | 'moderate' | 'aggressive';
+};
+
+export type GoalCalculationResult = {
+  bmr: number;
+  tdee: number;
+  daily_calories: number;
+  protein_g: number;
+  fat_g: number;
+  carbs_g: number;
+  hydration_ml: number;
 };
 
 export type Program = {

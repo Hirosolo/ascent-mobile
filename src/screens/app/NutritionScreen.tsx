@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -52,6 +53,55 @@ type SelectedFood = FoodItem & { servings: number };
 const MEAL_GROUP_ORDER: MealGroupName[] = ['Breakfast', 'Lunch', 'Dinner', 'Snacks', 'Supplements', 'Other'];
 const STEP_TITLES = ['Initialization', 'Database Search', 'Performance Ratio', 'Final Review'] as const;
 const STEP_MEAL_OPTIONS = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Pre-Workout', 'Post-Workout'];
+const STEP_EVENT_META: Record<string, { icon: string; image: string }> = {
+  Breakfast: {
+    icon: 'weather-sunset-up',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDgdqc0WJb67k-Lk2SkrgUMnqDOGg4lks-MC2QWv7fVgF7eS6njGvu7M26BFuWNR4T3ZCmmbHBlNLyvz6_xmsqFb9I4FOOegO-dNgwv9hLFc5Lb5-TpRl29YD5Qtfm2eVOuWvg75aDm1hIWFKoX_DUFKt7Zo6jyaOJayZvk0f8NZWvNfj60PTtjxsdh2wv5UD4iot1fuB0CXFKrB_nGKjLMGYDXF8End_zHoOIYMO_s5dVFjire4JmVJ58THLeJ7SpmAXXD3-gFqm_u',
+  },
+  Lunch: {
+    icon: 'white-balance-sunny',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuB7RTGx-haivlIzYN-GKA4tudhpDXa8_zqAW7IELUJvYeayqgv2IBTN_PsVdeOZsE040aGxi5zWBOhfg3QK_rGmsrA_NwFyRIbP_WbqEZGiWA_Cf53muXrPNMU2RUjhZPLlSxZzgKuCAIZ9MkHU9HLpwYcIutNo1UiX6iLpsvK2OX52qq5NWXeY8MLRikgTAsr_J2-Y4O76jG8BGi48QOkj204mLGNEMt50Dn3W2GpZFfHTPM7lqwZwL22l-fAIbhrMf9gL67Sdi4ih',
+  },
+  Dinner: {
+    icon: 'moon-waning-crescent',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuBBNv7NdQhHW9Mmr4luevSTmgubXcTOQU085nPgmsWuwNn0opurEybl9mt6uvmD9BPnDxCn9DtFikhNicEWRGjiE-t_GxxogXW1WA0AjybDdi0bcJITiZwVWmoonQ2ZgH9klYg5lCP0MtYyplWaTwokxeCd9NKfl3hPlQkmQaJMbPhRtVzVc7o7hib_Y5eIae8lsPvKojR0X6mV_o0oE5WmHOUgIqZiAmQWWXlQJ40-qOGMLK_NT5xdPC_dJODolF-ex9tLbplQWZ11',
+  },
+  Snack: {
+    icon: 'cookie',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDBcvLLIUvt0v1b6uYCI9ITVah1CcnXf3x8Xj77kbfpIcZ9F_Y8jIapZo3TC1FjR6RSTBKj0nSkY3jkQ8RmL_8_kX-knX0d-ZMEYxhzSrxmqnksRRnX0sd9aiJnqZX3dCerV-zxQgDYz-xzzS0SE9aR8Ixal3f6G1DSNjl_rVam7vzBBcQ2lM6RzdQ1XxpNcYL--2_4ltgn2ax5kMGJ5nnKXlTBFYYUOKtatk9TjzjMt0cnweBFjTCP4cP1KY6NjMGoCT6dT9RIzIh5',
+  },
+  'Pre-Workout': {
+    icon: 'dumbbell',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDalhGRl600dVhYAwlRVq1WS4Of6h9k0DluR4wmfWCpBsaSlV1v67SopZgZ6Zm_jkX2GdZhYAlqjjTIqmZHj03IEDC6Ip1Lmxyxo5sky6rCi4EZcuerv_MAiPqUKDm98jxI2oHQplcZo0GqXiM9npSNymYNj-Qe9-Zu7sUpnzehdtMt7Ufw4EmKtEv3ec_9EyGNxRgVa4rLsX_Xkk9Jp0IDcM_rxdGx3o6cNEm7RiWTlWcH7KYoJZo7qbSOnKYq2Rah6YrTMhWDBl55',
+  },
+  'Post-Workout': {
+    icon: 'lightning-bolt',
+    image:
+      'https://lh3.googleusercontent.com/aida-public/AB6AXuDakWqgSuWBryTK-AxEBHwJ0NudM8PZNcB-ZkSCszNuF65e_IC6eq9iUtFisGSL82xfBZt5ppCvAuQrs_9Ml-T2dgQ_m_Ov1fI5DiMkKjFOUGyc1vnn1foErFoLBicJ2VTEdqwZ3rM7ChIeU4ucKhvTekGPgalMVqC3kDiYsc7mBfmonKkKZ2wq0nONJXs5O1BzjYKgfKXQCfFkIWAYH3R8i4mIbr4wxwwOY4wFj95WQFW3x1CsjQfMXKcQ0-Lquxhlftt8Hs8DdxAw',
+  },
+};
+
+const MEAL_TYPE_IMAGES: Record<string, string> = {
+  breakfast:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDqRlv8L2zEpHtf3c3-ETR1Az3kROVigYRT0YyRQzQqJJpsJjbrAd7tFFqcpmgYjj1Z4E32oxqvx3YYURB7G19MvmWLfEYpSSmDvuTKic5mYxB661852ydnP6nzIHnY1mKXsuM0Ue_WD4EX-hm65nhx0UTjU6PI2f9Vq3UT98zSaytA8EdeOWtBuxBuh7ou7vnWQz0W1zX3Fjlu7CKgQNSvHHrJOW05UA_65YPb1CGiSii0NrUiL_K7PFKe9Go6m190Uua_dpzQm4uj',
+  lunch:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDnY9mtKYMdisJDfAKYpRsmXxsWa2Ai0iK8QL9-O3gsNuWzBhZSYOS8VQ5mlFEBG1EmzvPqR53Ao-YnRpkibV5bHSVtwVRpHAD2QoYmmASYBQB_KcxYwEAX5vlb1uCrxPXYDoe2EPdi8ReEGHvFAWdYUhqfD8vkyPWgMBbq2ShecwHTAfyyVYojyDkwN2-Wqt3ljW2l_cE_y4k5WNbFTJhbGffQi-H4CWTiVOpuP0HFHne37GFHrbe1PoJOofKOFQ9zSdSkBNEIgyi1',
+  dinner:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuCYdFbkdWOIZ38h_vXDkJH4ALlZ-4dc9vguNr6slSQOrh4BjCR-b-Sp_x6Gtjuz9BEpAcwiwCekkK7p9CHMG0QA7c-vbS7K_wHN0-6mDEzItsgrLo66N2u93S2pqRxWoBHGEQCmKlXjkCLrCw8bIhAslIoBNFjORQvxqkezph6pMT5cFYepCfb6mROfe6_K66PcpuO6ENfxsa7cYmcuZmZKgZfqUxtS10gl-M_GB2eJwwQZJUznnaH9ck5aZsrCz4uQQRamKY7Qk4C6',
+  snack:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDBcvLLIUvt0v1b6uYCI9ITVah1CcnXf3x8Xj77kbfpIcZ9F_Y8jIapZo3TC1FjR6RSTBKj0nSkY3jkQ8RmL_8_kX-knX0d-ZMEYxhzSrxmqnksRRnX0sd9aiJnqZX3dCerV-zxQgDYz-xzzS0SE9aR8Ixal3f6G1DSNjl_rVam7vzBBcQ2lM6RzdQ1XxpNcYL--2_4ltgn2ax5kMGJ5nnKXlTBFYYUOKtatk9TjzjMt0cnweBFjTCP4cP1KY6NjMGoCT6dT9RIzIh5',
+  'pre-workout':
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDalhGRl600dVhYAwlRVq1WS4Of6h9k0DluR4wmfWCpBsaSlV1v67SopZgZ6Zm_jkX2GdZhYAlqjjTIqmZHj03IEDC6Ip1Lmxyxo5sky6rCi4EZcuerv_MAiPqUKDm98jxI2oHQplcZo0GqXiM9npSNymYNj-Qe9-Zu7sUpnzehdtMt7Ufw4EmKtEv3ec_9EyGNxRgVa4rLsX_Xkk9Jp0IDcM_rxdGx3o6cNEm7RiWTlWcH7KYoJZo7qbSOnKYq2Rah6YrTMhWDBl55',
+  'post-workout':
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDalhGRl600dVhYAwlRVq1WS4Of6h9k0DluR4wmfWCpBsaSlV1v67SopZgZ6Zm_jkX2GdZhYAlqjjTIqmZHj03IEDC6Ip1Lmxyxo5sky6rCi4EZcuerv_MAiPqUKDm98jxI2oHQplcZo0GqXiM9npSNymYNj-Qe9-Zu7sUpnzehdtMt7Ufw4EmKtEv3ec_9EyGNxRgVa4rLsX_Xkk9Jp0IDcM_rxdGx3o6cNEm7RiWTlWcH7KYoJZo7qbSOnKYq2Rah6YrTMhWDBl55',
+  supplement:
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuDakWqgSuWBryTK-AxEBHwJ0NudM8PZNcB-ZkSCszNuF65e_IC6eq9iUtFisGSL82xfBZt5ppCvAuQrs_9Ml-T2dgQ_m_Ov1fI5DiMkKjFOUGyc1vnn1foErFoLBicJ2VTEdqwZ3rM7ChIeU4ucKhvTekGPgalMVqC3kDiYsc7mBfmonKkKZ2wq0nONJXs5O1BzjYKgfKXQCfFkIWAYH3R8i4mIbr4wxwwOY4wFj95WQFW3x1CsjQfMXKcQ0-Lquxhlftt8Hs8DdxAw',
+};
 
 const MEAL_GROUP_COLORS: Record<MealGroupName, string> = {
   Breakfast: '#3b82f6',
@@ -102,6 +152,20 @@ function mealTypeIcon(name: string): string {
   return 'silverware';
 }
 
+function mealTypeAccent(name: string): string {
+  const key = name.toLowerCase();
+  if (key === 'breakfast') return '#3b82f6';
+  if (key === 'lunch') return '#8b5cf6';
+  if (key === 'dinner') return '#6366f1';
+  if (key === 'snack') return '#f59e0b';
+  if (key === 'pre-workout' || key === 'post-workout') return '#06b6d4';
+  return '#64748b';
+}
+
+function mealTypeImage(name: string): string | undefined {
+  return MEAL_TYPE_IMAGES[name.trim().toLowerCase()];
+}
+
 function fmtNutrient(value: number | null | undefined, withUnit = false): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return '—';
@@ -114,6 +178,7 @@ export function NutritionScreen() {
   const [meals, setMeals] = useState<NormalisedMeal[]>([]);
   const [selectedMeal, setSelectedMeal] = useState<NormalisedMeal | null>(null);
   const [selectedMealFoods, setSelectedMealFoods] = useState<MealFoodItem[]>([]);
+  const [expandedFoodRows, setExpandedFoodRows] = useState<Record<string, boolean>>({});
   const [isLogModalOpen, setIsLogModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -148,6 +213,7 @@ export function NutritionScreen() {
   const [availableFoods, setAvailableFoods] = useState<FoodItem[]>([]);
   const [foodsLoading, setFoodsLoading] = useState(false);
   const [selectedFoods, setSelectedFoods] = useState<SelectedFood[]>([]);
+  const [servingDrafts, setServingDrafts] = useState<Record<number, string>>({});
   const [submittingMeal, setSubmittingMeal] = useState(false);
   const [customWater, setCustomWater] = useState('');
 
@@ -162,16 +228,23 @@ export function NutritionScreen() {
 
   const selectedFoodIds = useMemo(() => new Set(selectedFoods.map((f) => f.food_id)), [selectedFoods]);
 
-  const groupedMeals = useMemo(() => {
-    const map = new Map<MealGroupName, NormalisedMeal[]>();
-    MEAL_GROUP_ORDER.forEach((group) => map.set(group, []));
+  const orderedMeals = useMemo(() => {
+    const rank: Record<MealGroupName, number> = {
+      Breakfast: 0,
+      Lunch: 1,
+      Dinner: 2,
+      Snacks: 3,
+      Supplements: 4,
+      Other: 5,
+    };
 
-    meals.forEach((meal) => {
-      const group = mapMealTypeToGroup(meal.mealType);
-      map.get(group)?.push(meal);
+    return [...meals].sort((a, b) => {
+      const gA = mapMealTypeToGroup(a.mealType);
+      const gB = mapMealTypeToGroup(b.mealType);
+      const byGroup = rank[gA] - rank[gB];
+      if (byGroup !== 0) return byGroup;
+      return a.time.localeCompare(b.time);
     });
-
-    return MEAL_GROUP_ORDER.map((group) => ({ group, items: map.get(group) ?? [] }));
   }, [meals]);
 
   const totals = useMemo(() => {
@@ -275,6 +348,7 @@ export function NutritionScreen() {
 
   async function openMealDetail(meal: NormalisedMeal) {
     setSelectedMeal(meal);
+    setExpandedFoodRows({});
     setDetailLoading(true);
 
     try {
@@ -305,6 +379,7 @@ export function NutritionScreen() {
       await updateMealsMonthCacheAfterDelete(currentMonth, meal.meal_id);
       setSelectedMeal(null);
       setSelectedMealFoods([]);
+      setExpandedFoodRows({});
       await loadDailyData(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to delete meal';
@@ -319,6 +394,7 @@ export function NutritionScreen() {
     setNotes('');
     setSearchQuery('');
     setSelectedFoods([]);
+    setServingDrafts({});
 
     setFoodsLoading(true);
     try {
@@ -386,6 +462,7 @@ export function NutritionScreen() {
       setIsLogModalOpen(false);
       setStep(1);
       setSelectedFoods([]);
+      setServingDrafts({});
       setNotes('');
       await loadDailyData(false);
 
@@ -403,15 +480,47 @@ export function NutritionScreen() {
   function addFood(food: FoodItem) {
     if (selectedFoodIds.has(food.food_id)) return;
     setSelectedFoods((prev) => [...prev, { ...food, servings: 1 }]);
+    setServingDrafts((prev) => ({ ...prev, [food.food_id]: '1' }));
   }
 
   function removeFood(foodId: number) {
     setSelectedFoods((prev) => prev.filter((item) => item.food_id !== foodId));
+    setServingDrafts((prev) => {
+      const next = { ...prev };
+      delete next[foodId];
+      return next;
+    });
   }
 
   function updateServings(foodId: number, nextValue: number) {
     const safe = Math.max(0.5, Math.round(nextValue * 2) / 2);
     setSelectedFoods((prev) => prev.map((item) => (item.food_id === foodId ? { ...item, servings: safe } : item)));
+    setServingDrafts((prev) => ({ ...prev, [foodId]: String(safe) }));
+  }
+
+  function handleServingDraftChange(foodId: number, value: string) {
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    setServingDrafts((prev) => ({ ...prev, [foodId]: cleaned }));
+  }
+
+  function commitServingDraft(foodId: number) {
+    const raw = servingDrafts[foodId];
+    if (raw == null) return;
+
+    if (raw.trim() === '') {
+      const current = selectedFoods.find((item) => item.food_id === foodId)?.servings ?? 1;
+      setServingDrafts((prev) => ({ ...prev, [foodId]: String(current) }));
+      return;
+    }
+
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      const current = selectedFoods.find((item) => item.food_id === foodId)?.servings ?? 1;
+      setServingDrafts((prev) => ({ ...prev, [foodId]: String(current) }));
+      return;
+    }
+
+    updateServings(foodId, parsed);
   }
 
   const foodCandidates = useMemo(
@@ -436,12 +545,9 @@ export function NutritionScreen() {
     <Screen scroll refreshing={isRefreshing} onRefresh={handleRefresh} contentStyle={styles.screen}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.systemStatus}>Terminal Status: Online</Text>
-          <Text style={styles.title}>ASCENT MNT-01</Text>
+          <Text style={styles.systemStatus}>Ascent</Text>
+          <Text style={styles.title}>NUTRITION</Text>
           <Text style={styles.dateText}>{format(selectedDate, 'MMM dd, yyyy')}</Text>
-        </View>
-        <View style={styles.avatarCircle}>
-          <MaterialCommunityIcons color={colors.primary} name="account-circle" size={22} />
         </View>
       </View>
 
@@ -495,7 +601,6 @@ export function NutritionScreen() {
           <View style={styles.donutCenter}>
             <Text style={styles.smallDim}>Calories</Text>
             <Text style={styles.calorieValue}>{Math.round(macros.calories)}</Text>
-            <Text style={styles.smallDim}>Goal {Math.round(goals.calories)}</Text>
           </View>
         </View>
 
@@ -525,62 +630,8 @@ export function NutritionScreen() {
         </View>
       </View>
 
-      <View style={styles.waterCard}>
-        <Text style={styles.waterTitle}>HYDRATION MATRIX</Text>
-        <View style={styles.waterCircle}>
-          <Animated.View
-            style={[
-              styles.waterFill,
-              {
-                height: waterAnim.interpolate({ inputRange: [0, 100], outputRange: [0, 128] }),
-              },
-            ]}
-          />
-          <View style={styles.waterCenter}>
-            {isLoading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <>
-                <Text style={styles.waterValue}>{Math.round(macros.water)}</Text>
-                <Text style={styles.waterGoal}>/ {Math.round(goals.water)} ML</Text>
-              </>
-            )}
-          </View>
-        </View>
-
-        <View style={styles.waterPresetRow}>
-          <Pressable style={styles.waterPresetBtn} onPress={() => void executeAddWater(250)}>
-            <MaterialCommunityIcons color={colors.primary} name="cup-water" size={20} />
-            <Text style={styles.waterPresetLabel}>+250</Text>
-          </Pressable>
-          <Pressable style={styles.waterPresetBtn} onPress={() => void executeAddWater(500)}>
-            <MaterialCommunityIcons color={colors.primary} name="water" size={20} />
-            <Text style={styles.waterPresetLabel}>+500</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.customWaterRow}>
-          <TextInput
-            keyboardType="number-pad"
-            onChangeText={setCustomWater}
-            onSubmitEditing={() => void executeAddWater(Number(customWater))}
-            placeholder="Custom ML"
-            placeholderTextColor="rgba(255,255,255,0.35)"
-            style={styles.customWaterInput}
-            value={customWater}
-          />
-          <Pressable style={styles.customWaterAdd} onPress={() => void executeAddWater(Number(customWater))}>
-            <MaterialCommunityIcons color={colors.textPrimary} name="plus" size={20} />
-          </Pressable>
-        </View>
-
-        <Text style={styles.waterStatus}>
-          {clampPercent(macros.water, goals.water) >= 100 ? 'FULLY HYDRATED' : 'FUELING REQUIRED'}
-        </Text>
-      </View>
-
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>DAILY MEALS</Text>
+        <Text style={styles.sectionTitle}>Nutrition Log</Text>
       </View>
 
       {isLoading ? <ActivityIndicator color={colors.primary} /> : null}
@@ -593,48 +644,56 @@ export function NutritionScreen() {
         </View>
       ) : null}
 
-      {groupedMeals.map(({ group, items }) => {
-        if (items.length === 0) return null;
+      {orderedMeals.map((meal, idx) => {
+        const group = mapMealTypeToGroup(meal.mealType);
         const groupColor = MEAL_GROUP_COLORS[group];
-        return (
-          <View key={group} style={styles.groupWrap}>
-            <View style={styles.groupHeader}>
-              <Text style={styles.groupTitle}>{group}</Text>
-              <View style={styles.groupLine} />
-            </View>
+        const imageUri = mealTypeImage(meal.mealType);
 
-            {items.map((meal, idx) => (
-              <Pressable key={meal.meal_id} style={[styles.mealCard, idx > 0 && styles.mealCardGap, { borderLeftColor: groupColor }]} onPress={() => void openMealDetail(meal)}>
-                <View style={styles.mealRow}>
-                  <View style={[styles.mealIconBox, { backgroundColor: `${groupColor}22` }]}>
-                    <MaterialCommunityIcons color={groupColor} name={mealTypeIcon(meal.mealType)} size={20} />
+        return (
+          <Pressable
+            key={meal.meal_id}
+            style={[styles.mealCard, idx > 0 && styles.mealCardGap, { borderLeftColor: groupColor }]}
+            onPress={() => void openMealDetail(meal)}
+          >
+            <View style={styles.mealRow}>
+              <View style={styles.mealThumbWrap}>
+                {imageUri ? <Image source={{ uri: imageUri }} style={styles.mealThumb} /> : null}
+                <View style={styles.mealThumbShade} />
+                <MaterialCommunityIcons color={groupColor} name={mealTypeIcon(meal.mealType)} size={20} style={styles.mealThumbIcon} />
+              </View>
+
+              <View style={styles.mealContent}>
+                <View style={styles.mealTop}>
+                  <Text style={styles.mealName} numberOfLines={1}>{meal.name}</Text>
+                  <Text style={styles.mealMeta}>{meal.time}</Text>
+                </View>
+
+                <View style={styles.macroPills}>
+                  <View style={[styles.macroPill, styles.pillProtein]}>
+                    <Text style={styles.macroPillText}>P: {Math.round(meal.protein)}g</Text>
                   </View>
-                  <View style={styles.mealContent}>
-                    <View style={styles.mealTop}>
-                      <Text style={styles.mealName} numberOfLines={1}>{meal.name}</Text>
-                      <View style={styles.kcalBadge}>
-                        <Text style={styles.kcalBadgeText}>{Math.round(meal.calories)} KCAL</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.mealMeta}>{meal.time}</Text>
-                    <View style={styles.macroPills}>
-                      <View style={[styles.macroPill, styles.pillProtein]}>
-                        <Text style={styles.macroPillText}>P {Math.round(meal.protein)}g</Text>
-                      </View>
-                      <View style={[styles.macroPill, styles.pillCarbs]}>
-                        <Text style={styles.macroPillText}>C {Math.round(meal.carbs)}g</Text>
-                      </View>
-                      <View style={[styles.macroPill, styles.pillFats]}>
-                        <Text style={styles.macroPillText}>F {Math.round(meal.fats)}g</Text>
-                      </View>
-                    </View>
+                  <View style={[styles.macroPill, styles.pillCarbs]}>
+                    <Text style={styles.macroPillText}>C: {Math.round(meal.carbs)}g</Text>
+                  </View>
+                  <View style={[styles.macroPill, styles.pillFats]}>
+                    <Text style={styles.macroPillText}>F: {Math.round(meal.fats)}g</Text>
                   </View>
                 </View>
-              </Pressable>
-            ))}
-          </View>
+              </View>
+            </View>
+          </Pressable>
         );
       })}
+
+      <Pressable style={styles.pendingMealCard} onPress={() => void openLogModal()}>
+        <View style={styles.pendingMealIconWrap}>
+          <MaterialCommunityIcons color="rgba(148,163,184,0.7)" name="plus" size={28} />
+        </View>
+        <View style={styles.pendingMealCopy}>
+          <Text style={styles.pendingMealTitle}>Pending Dinner</Text>
+          <Text style={styles.pendingMealSubtitle}>Tap to record next meal terminal</Text>
+        </View>
+      </Pressable>
 
       <Pressable style={styles.fab} onPress={() => void openLogModal()}>
         <MaterialCommunityIcons color={colors.textPrimary} name="silverware-fork-knife" size={22} />
@@ -667,8 +726,41 @@ export function NutritionScreen() {
                 </View>
 
                 <ScrollView style={styles.foodList}>
-                  {selectedMealFoods.map((food, idx) => (
-                    <View key={`${food.food_id ?? 'food'}-${idx}`} style={styles.foodCard}>
+                  {selectedMealFoods.length === 0 ? (
+                    <View style={styles.noFoodWrap}>
+                      <Text style={styles.noFoodText}>No foods found for this meal entry.</Text>
+                    </View>
+                  ) : null}
+
+                  {selectedMealFoods.map((food, idx) => {
+                    const foodKey = `${food.food_id ?? 'food'}-${idx}`;
+                    const isExpanded = Boolean(expandedFoodRows[foodKey]);
+                    const extras = [
+                      { label: 'Sugars', value: food.sugars, unit: 'g' },
+                      { label: 'Zinc', value: food.zinc, unit: '' },
+                      { label: 'Magnesium', value: food.magnesium, unit: '' },
+                      { label: 'Calcium', value: food.calcium, unit: '' },
+                      { label: 'Iron', value: food.iron, unit: '' },
+                      { label: 'Vitamin A', value: food.vitamin_a, unit: '' },
+                      { label: 'Vitamin C', value: food.vitamin_c, unit: '' },
+                      { label: 'Vitamin B12', value: food.vitamin_b12, unit: '' },
+                      { label: 'Vitamin D', value: food.vitamin_d, unit: '' },
+                    ].filter((item) => {
+                      const n = Number(item.value);
+                      return Number.isFinite(n) && n > 0;
+                    });
+
+                    return (
+                    <Pressable
+                      key={foodKey}
+                      style={styles.foodCard}
+                      onPress={() =>
+                        setExpandedFoodRows((prev) => ({
+                          ...prev,
+                          [foodKey]: !prev[foodKey],
+                        }))
+                      }
+                    >
                       <View style={styles.foodHeader}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.foodName}>{food.name}</Text>
@@ -676,7 +768,14 @@ export function NutritionScreen() {
                             {food.numbers_of_serving ? `${food.numbers_of_serving} ${food.unit_type || 'unit'}` : food.unit_type || 'unit'}
                           </Text>
                         </View>
-                        <Text style={styles.foodKcal}>{Math.round(food.calories)} KCAL</Text>
+                        <View style={styles.foodHeaderRight}>
+                          <Text style={styles.foodKcal}>{Math.round(food.calories)} KCAL</Text>
+                          <MaterialCommunityIcons
+                            color={colors.textDim}
+                            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                            size={16}
+                          />
+                        </View>
                       </View>
 
                       <View style={styles.foodNutrientGrid}>
@@ -684,18 +783,28 @@ export function NutritionScreen() {
                         <Nutrient label="Carbs" value={fmtNutrient(food.carbs, true)} />
                         <Nutrient label="Fats" value={fmtNutrient(food.fats, true)} />
                         <Nutrient label="Fiber" value={fmtNutrient(food.fiber, true)} />
-                        <Nutrient label="Sugars" value={fmtNutrient(food.sugars, true)} />
-                        <Nutrient label="Zinc" value={fmtNutrient(food.zinc)} />
-                        <Nutrient label="Mag" value={fmtNutrient(food.magnesium)} />
-                        <Nutrient label="Calcium" value={fmtNutrient(food.calcium)} />
-                        <Nutrient label="Iron" value={fmtNutrient(food.iron)} />
-                        <Nutrient label="Vit A" value={fmtNutrient(food.vitamin_a)} />
-                        <Nutrient label="Vit C" value={fmtNutrient(food.vitamin_c)} />
-                        <Nutrient label="B12" value={fmtNutrient(food.vitamin_b12)} />
-                        <Nutrient label="Vit D" value={fmtNutrient(food.vitamin_d)} />
                       </View>
-                    </View>
-                  ))}
+
+                      {isExpanded ? (
+                        <View style={styles.foodExtraWrap}>
+                          {extras.length === 0 ? (
+                            <Text style={styles.foodExtraEmpty}>No additional nutrients.</Text>
+                          ) : (
+                            <View style={styles.foodNutrientGrid}>
+                              {extras.map((extra) => (
+                                <Nutrient
+                                  key={`${foodKey}-${extra.label}`}
+                                  label={extra.label}
+                                  value={fmtNutrient(extra.value, extra.unit === 'g')}
+                                />
+                              ))}
+                            </View>
+                          )}
+                        </View>
+                      ) : null}
+                    </Pressable>
+                    );
+                  })}
                 </ScrollView>
 
                 <View style={styles.detailFooter}>
@@ -715,61 +824,84 @@ export function NutritionScreen() {
       <Modal animationType="slide" transparent visible={isLogModalOpen} onRequestClose={() => setIsLogModalOpen(false)}>
         <View style={styles.overlayStrong}>
           <View style={styles.logSheet}>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
+            <View style={styles.logTopBar}>
+              <Pressable style={styles.logTopIconBtn} onPress={() => (step === 1 ? setIsLogModalOpen(false) : setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s)))}>
+                <MaterialCommunityIcons color={colors.textPrimary} name="arrow-left" size={20} />
+              </Pressable>
+              <Text style={styles.logTopTitle}>Log Nutrition</Text>
+              <Pressable style={styles.logTopIconBtn} onPress={() => setIsLogModalOpen(false)}>
+                <MaterialCommunityIcons color={colors.textDim} name="help-circle-outline" size={20} />
+              </Pressable>
+            </View>
+
+            <View style={styles.stepBarsRow}>
+              {[1, 2, 3, 4].map((stepIndex) => (
+                <View key={`step-${stepIndex}`} style={styles.stepBarCol}>
+                  <View style={[styles.stepBarTrack, step >= stepIndex ? styles.stepBarTrackActive : null]} />
+                  <Text style={[styles.stepBarLabel, step === stepIndex ? styles.stepBarLabelActive : null]}>Step {stepIndex}</Text>
+                </View>
+              ))}
             </View>
 
             <View style={styles.logHeader}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.stepLabel}>Step {String(step).padStart(2, '0')} of 04</Text>
-                <Text style={styles.stepTitle}>{STEP_TITLES[step - 1]}</Text>
+                <Text style={styles.stepLabel}>{STEP_TITLES[step - 1]}</Text>
                 <Text style={styles.stepDate}>{format(selectedDate, 'MMM dd, yyyy')}</Text>
               </View>
-              <Pressable style={styles.closeCircle} onPress={() => setIsLogModalOpen(false)}>
-                <MaterialCommunityIcons color={colors.textPrimary} name="close" size={20} />
-              </Pressable>
             </View>
 
             <View style={styles.logBody}>
               {step === 1 ? (
-                <View style={{ gap: 12 }}>
-                  <Text style={styles.blockLabel}>Select Target Meal</Text>
+                <ScrollView contentContainerStyle={styles.stepScrollBody}>
+                  <Text style={styles.stepSectionHeading}>Choose Event</Text>
                   <View style={styles.mealTypeGrid}>
                     {STEP_MEAL_OPTIONS.map((option) => {
                       const active = option === mealType;
+                      const accent = mealTypeAccent(option);
+                      const meta = STEP_EVENT_META[option] ?? STEP_EVENT_META.Breakfast;
                       return (
-                        <Pressable key={option} style={[styles.mealTypeBtn, active && styles.mealTypeBtnActive]} onPress={() => setMealType(option)}>
-                          <MaterialCommunityIcons color={active ? colors.textPrimary : colors.textDim} name={mealTypeIcon(option)} size={18} />
-                          <Text style={[styles.mealTypeTxt, active && styles.mealTypeTxtActive]}>{option}</Text>
+                        <Pressable key={option} style={[styles.eventCard, active && { borderColor: accent }]} onPress={() => setMealType(option)}>
+                          <Image source={{ uri: meta.image }} style={styles.eventCardImage} />
+                          <View style={styles.eventCardOverlay} />
+                          <View style={styles.eventCardBody}>
+                            <MaterialCommunityIcons color={active ? colors.primary : 'rgba(255,255,255,0.75)'} name={meta.icon} size={20} />
+                            <Text style={[styles.eventCardTitle, active && styles.eventCardTitleActive]}>{option}</Text>
+                          </View>
+                          {active ? (
+                            <View style={styles.eventCardCheck}>
+                              <MaterialCommunityIcons color="#fff" name="check" size={14} />
+                            </View>
+                          ) : null}
                         </Pressable>
                       );
                     })}
                   </View>
 
-                  <Text style={styles.blockLabel}>Performance Notes</Text>
+                  <Text style={styles.blockLabel}>Meal Notes</Text>
                   <TextInput
                     multiline
                     onChangeText={setNotes}
-                    placeholder="Add details about session timing or fueling feel..."
+                    placeholder="Add meal context, timing, or notes..."
                     placeholderTextColor="rgba(255,255,255,0.35)"
                     style={styles.notesInput}
                     value={notes}
                   />
-                </View>
+                </ScrollView>
               ) : null}
 
               {step === 2 ? (
                 <View style={{ gap: 10, flex: 1 }}>
-                  <View style={styles.searchWrap}>
+                  <View style={styles.searchWrapHero}>
+                    <MaterialCommunityIcons color={colors.textDim} name="magnify" size={20} />
                     <TextInput
                       autoFocus
                       onChangeText={setSearchQuery}
-                      placeholder="Search foods"
+                      placeholder="Search for food or scan barcode..."
                       placeholderTextColor="rgba(255,255,255,0.4)"
                       style={styles.searchInput}
                       value={searchQuery}
                     />
-                    <MaterialCommunityIcons color={colors.textDim} name="magnify" size={20} />
+                    <MaterialCommunityIcons color={colors.primary} name="barcode-scan" size={20} />
                   </View>
 
                   {foodsLoading ? <ActivityIndicator color={colors.primary} /> : null}
@@ -779,10 +911,13 @@ export function NutritionScreen() {
                     keyExtractor={(item) => String(item.food_id)}
                     renderItem={({ item }) => (
                       <Pressable style={styles.foodPickRow} onPress={() => addFood(item)}>
+                        <View style={styles.foodPickImageStub}>
+                          <MaterialCommunityIcons color={colors.primary} name="food-steak" size={20} />
+                        </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.foodPickName}>{item.name}</Text>
                           <Text style={styles.foodPickMeta}>
-                            {Math.round(toNumber(item.calories_per_serving))} KCAL per 1 {item.unit_type || item.serving_type || 'unit'}
+                            {Math.round(toNumber(item.calories_per_serving))} kcal, {Math.round(toNumber(item.protein_per_serving))} P, {Math.round(toNumber(item.carbs_per_serving))} C, {Math.round(toNumber(item.fat_per_serving))} F / 1 {item.unit_type || item.serving_type || 'g'}
                           </Text>
                         </View>
                         <MaterialCommunityIcons color={colors.primary} name="plus-circle-outline" size={22} />
@@ -793,7 +928,7 @@ export function NutritionScreen() {
 
                   {selectedFoods.length > 0 ? (
                     <View style={styles.stagedWrap}>
-                      <Text style={styles.stagedTitle}>Staged Items ({selectedFoods.length})</Text>
+                      <Text style={styles.stagedTitle}>Selected Foods ({selectedFoods.length})</Text>
                       <View style={styles.stagedList}>
                         {selectedFoods.map((food) => (
                           <Pressable key={`staged-${food.food_id}`} style={styles.stagedChip} onPress={() => removeFood(food.food_id)}>
@@ -807,26 +942,33 @@ export function NutritionScreen() {
               ) : null}
 
               {step === 3 ? (
-                <ScrollView contentContainerStyle={{ gap: 10 }}>
+                <ScrollView contentContainerStyle={styles.stepScrollBody}>
                   {selectedFoods.map((food) => (
-                    <View key={`ratio-${food.food_id}`} style={styles.ratioCard}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.ratioName}>{food.name}</Text>
-                        <Text style={styles.ratioUnit}>UNIT: {food.unit_type || food.serving_type || 'unit'}</Text>
+                    <View key={`ratio-${food.food_id}`} style={styles.ratioCardModern}>
+                      <View style={styles.ratioCardHead}>
+                        <View style={styles.foodPickImageStub}>
+                          <MaterialCommunityIcons color={colors.primary} name="food-apple" size={20} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.ratioName}>{food.name}</Text>
+                          <Text style={styles.ratioUnit}>{Math.round(toNumber(food.calories_per_serving))} kcal/{food.unit_type || food.serving_type || 'serving'}</Text>
+                        </View>
                       </View>
 
                       <View style={styles.stepperRow}>
                         <Pressable style={styles.stepperBtn} onPress={() => updateServings(food.food_id, food.servings - 0.5)}>
-                          <Text style={styles.stepperBtnTxt}>-</Text>
+                          <MaterialCommunityIcons color={colors.textPrimary} name="minus" size={16} />
                         </Pressable>
                         <TextInput
                           keyboardType="decimal-pad"
-                          onChangeText={(v) => updateServings(food.food_id, Number(v) || 0.5)}
+                          onBlur={() => commitServingDraft(food.food_id)}
+                          onChangeText={(v) => handleServingDraftChange(food.food_id, v)}
+                          onSubmitEditing={() => commitServingDraft(food.food_id)}
                           style={styles.servingInput}
-                          value={String(food.servings)}
+                          value={servingDrafts[food.food_id] ?? String(food.servings)}
                         />
                         <Pressable style={styles.stepperBtn} onPress={() => updateServings(food.food_id, food.servings + 0.5)}>
-                          <Text style={styles.stepperBtnTxt}>+</Text>
+                          <MaterialCommunityIcons color="#fff" name="plus" size={16} />
                         </Pressable>
                       </View>
                     </View>
@@ -835,14 +977,17 @@ export function NutritionScreen() {
               ) : null}
 
               {step === 4 ? (
-                <View style={{ gap: 12 }}>
-                  <View style={styles.aggregateBox}>
-                    <Text style={styles.aggregateLabel}>Aggregate Nutrition</Text>
-                    <View style={styles.aggregateGrid}>
-                      <DetailMetric label="Calories" value={Math.round(totals.calories)} />
-                      <DetailMetric color={MACRO_COLORS.protein} label="Protein" value={Math.round(totals.protein)} />
-                      <DetailMetric color={MACRO_COLORS.carbs} label="Carbs" value={Math.round(totals.carbs)} />
-                      <DetailMetric color={MACRO_COLORS.fats} label="Fats" value={Math.round(totals.fats)} />
+                <ScrollView contentContainerStyle={styles.stepScrollBody}>
+                  <View style={styles.aggregateHeroBox}>
+                    <Text style={styles.aggregateLabel}>Meal Total</Text>
+                    <View style={styles.aggregateHeroValueRow}>
+                      <Text style={styles.aggregateHeroValue}>{Math.round(totals.calories)}</Text>
+                      <Text style={styles.aggregateHeroUnit}>kcal</Text>
+                    </View>
+                    <View style={styles.aggregateMacroBars}>
+                      <MacroBar label="Protein" value={Math.round(totals.protein)} color={MACRO_COLORS.protein} pct={clampPercent(totals.protein, Math.max(1, goals.protein))} />
+                      <MacroBar label="Carbs" value={Math.round(totals.carbs)} color={MACRO_COLORS.carbs} pct={clampPercent(totals.carbs, Math.max(1, goals.carbs))} />
+                      <MacroBar label="Fat" value={Math.round(totals.fats)} color={MACRO_COLORS.fats} pct={clampPercent(totals.fats, Math.max(1, goals.fats))} />
                     </View>
                   </View>
 
@@ -851,20 +996,18 @@ export function NutritionScreen() {
                     <View key={`summary-${food.food_id}`} style={styles.summaryRow}>
                       <Text style={styles.summaryName}>{food.name}</Text>
                       <Text style={styles.summaryQty}>
-                        {food.servings} {food.unit_type || 'units'}
+                        {food.servings} {food.unit_type || food.serving_type || 'serving'}
                       </Text>
                     </View>
                   ))}
-                </View>
+                </ScrollView>
               ) : null}
             </View>
 
             <View style={styles.logFooter}>
-              {step > 1 ? (
-                <Pressable style={styles.prevBtn} onPress={() => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s))}>
-                  <Text style={styles.prevBtnText}>Previous Phase</Text>
-                </Pressable>
-              ) : null}
+              <Pressable style={styles.prevBtn} onPress={() => (step === 1 ? setIsLogModalOpen(false) : setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3 | 4) : s)))}>
+                <Text style={styles.prevBtnText}>{step === 1 ? 'Save Draft' : 'Back'}</Text>
+              </Pressable>
 
               {step < 4 ? (
                 <Pressable
@@ -872,7 +1015,7 @@ export function NutritionScreen() {
                   onPress={() => setStep((s) => (s < 4 ? ((s + 1) as 1 | 2 | 3 | 4) : s))}
                   disabled={step === 2 && selectedFoods.length === 0}
                 >
-                  <Text style={styles.nextBtnText}>Iterate Next</Text>
+                  <Text style={styles.nextBtnText}>Continue</Text>
                 </Pressable>
               ) : (
                 <Pressable
@@ -880,7 +1023,7 @@ export function NutritionScreen() {
                   onPress={() => void handleCreateMeal()}
                   disabled={selectedFoods.length === 0 || submittingMeal}
                 >
-                  <Text style={styles.nextBtnText}>{submittingMeal ? 'Finalising...' : 'Finalise Data Entry'}</Text>
+                  <Text style={styles.finalBtnText}>{submittingMeal ? 'Saving...' : 'Log Meal'}</Text>
                 </Pressable>
               )}
             </View>
@@ -953,6 +1096,21 @@ function Nutrient({ label, value }: { label: string; value: string }) {
   );
 }
 
+function MacroBar({ label, value, color, pct }: { label: string; value: number; color: string; pct: number }) {
+  return (
+    <View style={styles.aggregateMacroItem}>
+      <Text style={styles.aggregateMacroLabel}>{label}</Text>
+      <View style={styles.aggregateMacroValueRow}>
+        <Text style={styles.aggregateMacroValue}>{value}</Text>
+        <Text style={styles.aggregateMacroUnit}>g</Text>
+      </View>
+      <View style={styles.aggregateMacroTrack}>
+        <View style={[styles.aggregateMacroFill, { width: `${Math.max(0, Math.min(100, pct))}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   screen: {
     backgroundColor: '#050505',
@@ -1002,9 +1160,9 @@ const styles = StyleSheet.create({
   },
   dayBtn: {
     minWidth: 60,
-    paddingVertical: 10,
+    paddingVertical: 6,
     paddingHorizontal: 8,
-    borderRadius: 16,
+    borderRadius: 14,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
@@ -1017,17 +1175,17 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     color: colors.textDim,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
-    letterSpacing: 1.4,
+    letterSpacing: 1.1,
   },
   dayLabelActive: {
     color: '#fff',
   },
   dayNumber: {
-    marginTop: 4,
+    marginTop: 1,
     color: colors.textPrimary,
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '800',
   },
   dayNumberActive: {
@@ -1100,16 +1258,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     borderRadius: 26,
-    padding: 14,
+    padding: 18,
     alignItems: 'center',
     gap: 12,
     backgroundColor: '#0c0c0c',
+    overflow: 'hidden',
+  },
+  waterHeroIcon: {
+    position: 'absolute',
+    right: 16,
+    top: 12,
   },
   waterTitle: {
-    color: colors.textDim,
-    letterSpacing: 3,
-    fontSize: 10,
+    color: 'rgba(255,255,255,0.65)',
+    letterSpacing: 2.4,
+    fontSize: 11,
     fontWeight: '800',
+    textTransform: 'uppercase',
   },
   waterCircle: {
     width: 136,
@@ -1141,6 +1306,29 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     fontSize: 10,
     fontWeight: '700',
+  },
+  waterMetaRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  waterMetaText: {
+    color: 'rgba(255,255,255,0.42)',
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  waterProgressTrack: {
+    width: '100%',
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  waterProgressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
   },
   waterPresetRow: {
     flexDirection: 'row',
@@ -1198,11 +1386,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   sectionTitle: {
-    color: colors.textPrimary,
-    letterSpacing: 2.5,
-    textTransform: 'uppercase',
+    color: 'rgba(255,255,255,0.62)',
     fontWeight: '800',
     fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1.8,
   },
   emptyState: {
     borderRadius: 20,
@@ -1248,7 +1436,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     borderLeftWidth: 4,
-    backgroundColor: '#121212',
+    backgroundColor: '#11182766',
   },
   mealCardGap: {
     marginTop: 8,
@@ -1258,13 +1446,28 @@ const styles = StyleSheet.create({
     gap: 12,
     alignItems: 'flex-start',
   },
-  mealIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  mealThumbWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#0f172a',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    position: 'relative',
+  },
+  mealThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  mealThumbShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  mealThumbIcon: {
+    position: 'absolute',
   },
   mealContent: {
     flex: 1,
@@ -1277,7 +1480,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   mealMeta: {
-    color: colors.textDim,
+    color: 'rgba(148,163,184,0.9)',
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -1285,10 +1488,10 @@ const styles = StyleSheet.create({
   },
   mealName: {
     color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-    textTransform: 'uppercase',
+    fontSize: 13,
+    fontWeight: '800',
     flex: 1,
+    marginRight: 8,
   },
   macroPills: {
     flexDirection: 'row',
@@ -1320,17 +1523,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   kcalBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.35)',
-    backgroundColor: 'rgba(59,130,246,0.12)',
-    borderRadius: 10,
+    display: 'none',
   },
   kcalBadgeText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '800',
+    display: 'none',
   },
   macroRow: {
     flexDirection: 'row',
@@ -1365,6 +1561,41 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 3 },
     elevation: 7,
+  },
+  pendingMealCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.2)',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 14,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  pendingMealIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(148,163,184,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15,23,42,0.5)',
+  },
+  pendingMealCopy: {
+    flex: 1,
+  },
+  pendingMealTitle: {
+    color: 'rgba(148,163,184,0.9)',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  pendingMealSubtitle: {
+    color: colors.textDim,
+    fontSize: 11,
+    marginTop: 3,
   },
   overlay: {
     flex: 1,
@@ -1447,6 +1678,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 12,
   },
+  noFoodWrap: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  noFoodText: {
+    color: colors.textDim,
+    textAlign: 'center',
+    fontSize: 12,
+  },
   foodCard: {
     borderRadius: 16,
     borderWidth: 1,
@@ -1477,10 +1722,24 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 1,
   },
+  foodHeaderRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
   foodNutrientGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+  },
+  foodExtraWrap: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    paddingTop: 8,
+    marginTop: 2,
+  },
+  foodExtraEmpty: {
+    color: colors.textDim,
+    fontSize: 11,
   },
   nutrientCell: {
     width: '30%',
@@ -1535,6 +1794,54 @@ const styles = StyleSheet.create({
     backgroundColor: '#0c0c0c',
     overflow: 'hidden',
   },
+  logTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  logTopIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  logTopTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  stepBarsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  stepBarCol: {
+    flex: 1,
+    gap: 6,
+  },
+  stepBarTrack: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  stepBarTrackActive: {
+    backgroundColor: colors.primary,
+  },
+  stepBarLabel: {
+    color: 'rgba(255,255,255,0.32)',
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  stepBarLabelActive: {
+    color: colors.primary,
+  },
   progressTrack: {
     width: '100%',
     height: 6,
@@ -1549,22 +1856,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 4,
     paddingBottom: 8,
     gap: 8,
   },
   stepLabel: {
     color: colors.primary,
-    letterSpacing: 2,
+    letterSpacing: 1.2,
     fontWeight: '800',
-    fontSize: 10,
-    textTransform: 'uppercase',
-  },
-  stepTitle: {
-    color: colors.textPrimary,
-    fontSize: 30,
-    fontWeight: '900',
-    marginTop: 2,
+    fontSize: 16,
   },
   stepDate: {
     color: 'rgba(255,255,255,0.5)',
@@ -1576,6 +1876,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
+  stepScrollBody: {
+    gap: 12,
+    paddingBottom: 12,
+  },
+  stepSectionHeading: {
+    color: colors.textPrimary,
+    fontSize: 32,
+    fontWeight: '800',
+  },
   blockLabel: {
     color: colors.textDim,
     textTransform: 'uppercase',
@@ -1586,30 +1895,57 @@ const styles = StyleSheet.create({
   mealTypeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 10,
+    justifyContent: 'space-between',
   },
-  mealTypeBtn: {
-    width: '31%',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+  eventCard: {
+    width: '31.5%',
+    minHeight: 114,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#121212',
+    backgroundColor: 'rgba(17,24,39,0.55)',
+    justifyContent: 'flex-end',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  eventCardImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  eventCardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  eventCardBody: {
+    padding: 10,
+    gap: 6,
+  },
+  eventCardIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  mealTypeBtnActive: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.12)',
-  },
-  mealTypeTxt: {
-    color: colors.textDim,
+  eventCardTitle: {
+    color: 'rgba(255,255,255,0.82)',
     fontWeight: '700',
     fontSize: 11,
   },
-  mealTypeTxtActive: {
+  eventCardTitleActive: {
     color: colors.textPrimary,
+  },
+  eventCardCheck: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   notesInput: {
     minHeight: 110,
@@ -1631,12 +1967,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: '#121212',
   },
+  searchWrapHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    backgroundColor: '#111827',
+    gap: 10,
+  },
   searchInput: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     paddingVertical: 12,
+  },
+  foodPickImageStub: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(30,41,59,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   foodPickRow: {
     flexDirection: 'row',
@@ -1697,18 +2053,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  ratioCardModern: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 18,
+    padding: 12,
+    backgroundColor: '#121212',
+    gap: 12,
+  },
+  ratioCardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   ratioName: {
     color: colors.textPrimary,
-    fontWeight: '900',
-    fontSize: 18,
-    textTransform: 'uppercase',
+    fontWeight: '800',
+    fontSize: 15,
   },
   ratioUnit: {
     color: colors.textDim,
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
   stepperRow: {
     flexDirection: 'row',
@@ -1722,6 +2088,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  stepperBtnActive: {
+    backgroundColor: colors.primary,
   },
   stepperBtnTxt: {
     color: colors.textPrimary,
@@ -1745,6 +2114,14 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
+  aggregateHeroBox: {
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.3)',
+    backgroundColor: 'rgba(59,130,246,0.12)',
+    borderRadius: 22,
+    padding: 18,
+    gap: 14,
+  },
   aggregateLabel: {
     color: colors.primary,
     fontWeight: '800',
@@ -1752,6 +2129,62 @@ const styles = StyleSheet.create({
     letterSpacing: 2.4,
     fontSize: 10,
     textAlign: 'center',
+  },
+  aggregateHeroValueRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  aggregateHeroValue: {
+    color: colors.textPrimary,
+    fontSize: 56,
+    fontWeight: '900',
+    lineHeight: 56,
+  },
+  aggregateHeroUnit: {
+    color: colors.textDim,
+    fontSize: 18,
+    fontStyle: 'italic',
+  },
+  aggregateMacroBars: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  aggregateMacroItem: {
+    flex: 1,
+    gap: 6,
+  },
+  aggregateMacroLabel: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  aggregateMacroValueRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  aggregateMacroValue: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  aggregateMacroUnit: {
+    color: colors.textDim,
+    fontSize: 11,
+  },
+  aggregateMacroTrack: {
+    width: '100%',
+    height: 6,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  aggregateMacroFill: {
+    height: '100%',
+    borderRadius: 999,
   },
   aggregateGrid: {
     flexDirection: 'row',
@@ -1803,7 +2236,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: colors.primary,
     paddingVertical: 12,
   },
   finalBtn: {
@@ -1815,7 +2248,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   nextBtnText: {
-    color: '#000',
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  finalBtnText: {
+    color: '#fff',
     fontWeight: '900',
     fontSize: 12,
     textTransform: 'uppercase',

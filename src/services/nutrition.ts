@@ -57,6 +57,15 @@ export type MealDetail = {
   foods: MealFoodItem[];
 };
 
+type MealDetailApi = {
+  meal_id?: number;
+  meal_type?: string;
+  log_date?: string;
+  foods?: Array<Record<string, unknown>>;
+  details?: Array<Record<string, unknown>>;
+  meal_details?: Array<Record<string, unknown>>;
+};
+
 export type FoodItem = {
   food_id: number;
   name: string;
@@ -106,6 +115,91 @@ const CACHE_DATE_FORMAT = 'dd-MM-yyyy';
 function toNumber(value: unknown): number {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function resolveServingAmount(item: Record<string, unknown>): number {
+  const direct = toNumber(item.numbers_of_serving ?? item.servings ?? item.quantity ?? item.qty);
+  if (direct > 0) return direct;
+  return 1;
+}
+
+function resolveNutrientTotal(
+  item: Record<string, unknown>,
+  servingAmount: number,
+  totalKey: string,
+  perServingKey: string,
+): number {
+  const total = toNumber(item[totalKey]);
+  if (total > 0) return total;
+
+  const perServing = toNumber(item[perServingKey]);
+  if (perServing > 0) return perServing * servingAmount;
+
+  return 0;
+}
+
+function normaliseMealFoodsFromRows(rows: Array<Record<string, unknown>>): MealFoodItem[] {
+  return rows.map((item) => {
+    const nestedFood =
+      item.food && typeof item.food === 'object' && !Array.isArray(item.food)
+        ? (item.food as Record<string, unknown>)
+        : undefined;
+
+    const servings = resolveServingAmount(item);
+    const servingAmount = servings > 0 ? servings : resolveServingAmount(nestedFood ?? {});
+
+    return {
+      meal_detail_id: toNumber(item.meal_detail_id),
+      food_id: toNumber(item.food_id ?? nestedFood?.food_id),
+      name: String(item.food_name ?? item.name ?? nestedFood?.name ?? 'Food'),
+      unit_type: String(item.unit_type ?? item.serving_type ?? nestedFood?.unit_type ?? nestedFood?.serving_type ?? 'serving'),
+      numbers_of_serving: servingAmount,
+      calories:
+        resolveNutrientTotal(item, servingAmount, 'total_calories', 'calories_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_calories', 'calories_per_serving'),
+      protein:
+        resolveNutrientTotal(item, servingAmount, 'total_protein', 'protein_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_protein', 'protein_per_serving'),
+      carbs:
+        resolveNutrientTotal(item, servingAmount, 'total_carbs', 'carbs_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_carbs', 'carbs_per_serving'),
+      fats:
+        resolveNutrientTotal(item, servingAmount, 'total_fat', 'fat_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_fat', 'fat_per_serving'),
+      fiber:
+        resolveNutrientTotal(item, servingAmount, 'total_fibers', 'fibers_per_serving') ||
+        resolveNutrientTotal(item, servingAmount, 'total_fiber', 'fiber_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_fibers', 'fibers_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_fiber', 'fiber_per_serving'),
+      sugars:
+        resolveNutrientTotal(item, servingAmount, 'total_sugars', 'sugars_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_sugars', 'sugars_per_serving'),
+      zinc:
+        resolveNutrientTotal(item, servingAmount, 'total_zincs', 'zincs_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_zincs', 'zincs_per_serving'),
+      magnesium:
+        resolveNutrientTotal(item, servingAmount, 'total_magnesiums', 'magnesiums_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_magnesiums', 'magnesiums_per_serving'),
+      calcium:
+        resolveNutrientTotal(item, servingAmount, 'total_calciums', 'calciums_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_calciums', 'calciums_per_serving'),
+      iron:
+        resolveNutrientTotal(item, servingAmount, 'total_irons', 'irons_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_irons', 'irons_per_serving'),
+      vitamin_a:
+        resolveNutrientTotal(item, servingAmount, 'total_vitamin_a', 'vitamin_a_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_vitamin_a', 'vitamin_a_per_serving'),
+      vitamin_c:
+        resolveNutrientTotal(item, servingAmount, 'total_vitamin_c', 'vitamin_c_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_vitamin_c', 'vitamin_c_per_serving'),
+      vitamin_b12:
+        resolveNutrientTotal(item, servingAmount, 'total_vitamin_b12', 'vitamin_b12_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_vitamin_b12', 'vitamin_b12_per_serving'),
+      vitamin_d:
+        resolveNutrientTotal(item, servingAmount, 'total_vitamin_d', 'vitamin_d_per_serving') ||
+        resolveNutrientTotal(nestedFood ?? {}, servingAmount, 'total_vitamin_d', 'vitamin_d_per_serving'),
+    };
+  });
 }
 
 function titleizeMealType(rawType: string | null | undefined): string {
@@ -404,34 +498,9 @@ export function deleteMeal(mealId: number): Promise<{ message?: string }> {
 }
 
 export async function getMealDetail(mealId: number): Promise<MealDetail> {
-  const detail = await apiFetch<{
-    meal_id: number;
-    meal_type: string;
-    log_date: string;
-    foods?: Array<Record<string, unknown>>;
-  }>(`/meals/${mealId}`);
-
-  const foods = (detail.foods ?? []).map((item) => ({
-    meal_detail_id: toNumber(item.meal_detail_id),
-    food_id: toNumber(item.food_id),
-    name: String(item.food_name ?? item.name ?? 'Food'),
-    unit_type: String(item.unit_type ?? item.serving_type ?? ''),
-    numbers_of_serving: toNumber(item.numbers_of_serving),
-    calories: toNumber(item.total_calories),
-    protein: toNumber(item.total_protein),
-    carbs: toNumber(item.total_carbs),
-    fats: toNumber(item.total_fat),
-    fiber: toNumber(item.total_fibers ?? item.total_fiber),
-    sugars: toNumber(item.total_sugars),
-    zinc: toNumber(item.total_zincs),
-    magnesium: toNumber(item.total_magnesiums),
-    calcium: toNumber(item.total_calciums),
-    iron: toNumber(item.total_irons),
-    vitamin_a: toNumber(item.total_vitamin_a),
-    vitamin_c: toNumber(item.total_vitamin_c),
-    vitamin_b12: toNumber(item.total_vitamin_b12),
-    vitamin_d: toNumber(item.total_vitamin_d),
-  }));
+  const detail = await apiFetch<MealDetailApi>(`/meals/${mealId}`);
+  const rows = detail.foods ?? detail.details ?? detail.meal_details ?? [];
+  const foods = normaliseMealFoodsFromRows(rows);
 
   return {
     meal_id: detail.meal_id,
@@ -442,26 +511,49 @@ export async function getMealDetail(mealId: number): Promise<MealDetail> {
 }
 
 export async function getMealDetailsFallback(mealId: number): Promise<MealFoodItem[]> {
-  const rows = await apiFetch<Array<Record<string, unknown>>>(`/meal-details?meal_id=${mealId}`);
-  return rows.map((item) => ({
-    meal_detail_id: toNumber(item.meal_detail_id),
-    food_id: toNumber(item.food_id),
-    name: String(item.name ?? item.food_name ?? 'Food'),
-    unit_type: String(item.serving_type ?? item.unit_type ?? ''),
-    numbers_of_serving: toNumber(item.numbers_of_serving ?? item.amount_grams),
-    calories: toNumber(item.total_calories ?? item.calories_per_serving),
-    protein: toNumber(item.total_protein ?? item.protein_per_serving),
-    carbs: toNumber(item.total_carbs ?? item.carbs_per_serving),
-    fats: toNumber(item.total_fat ?? item.fat_per_serving),
-    fiber: toNumber(item.total_fibers ?? item.fibers_per_serving),
-    sugars: toNumber(item.total_sugars ?? item.sugars_per_serving),
-    zinc: toNumber(item.total_zincs ?? item.zincs_per_serving),
-    magnesium: toNumber(item.total_magnesiums ?? item.magnesiums_per_serving),
-    calcium: toNumber(item.total_calciums ?? item.calciums_per_serving),
-    iron: toNumber(item.total_irons ?? item.irons_per_serving),
-    vitamin_a: toNumber(item.total_vitamin_a ?? item.vitamin_a_per_serving),
-    vitamin_c: toNumber(item.total_vitamin_c ?? item.vitamin_c_per_serving),
-    vitamin_b12: toNumber(item.total_vitamin_b12 ?? item.vitamin_b12_per_serving),
-    vitamin_d: toNumber(item.total_vitamin_d ?? item.vitamin_d_per_serving),
-  }));
+  const detail = await apiFetch<MealDetailApi>(`/meals/${mealId}`);
+  const rows = detail.foods ?? detail.details ?? detail.meal_details ?? [];
+  return normaliseMealFoodsFromRows(rows);
+}
+
+// ─── Metrics & Goal ──────────────────────────────────────────────────────────
+
+import type { MetricData, GoalCalculationParams, GoalCalculationResult } from '@/types/api';
+
+export async function fetchLatestMetrics(): Promise<MetricData | null> {
+  try {
+    return await apiFetch<MetricData>('/nutrition/metrics/latest');
+  } catch {
+    return null;
+  }
+}
+
+export async function saveUserMetric(metrics: Partial<MetricData>): Promise<void> {
+  await apiFetch('/nutrition/metrics', {
+    method: 'POST',
+    body: JSON.stringify(metrics),
+  });
+}
+
+export async function calculateGoalTargets(params: GoalCalculationParams): Promise<GoalCalculationResult> {
+  return apiFetch<GoalCalculationResult>('/nutrition/goals/calculate', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
+
+export async function saveNutritionGoalTargets(
+  params: GoalCalculationParams & GoalCalculationResult,
+): Promise<void> {
+  await apiFetch('/nutrition/goals', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...params,
+      calories_target: params.daily_calories,
+      protein_target_g: params.protein_g,
+      carbs_target_g: params.carbs_g,
+      fat_target_g: params.fat_g,
+      hydration_target_ml: params.hydration_ml,
+    }),
+  });
 }
