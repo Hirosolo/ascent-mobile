@@ -1,0 +1,17 @@
+node_modules
+
+# Build and generated artifacts
+android/.cxx/
+android/app/.cxx/
+android/build/
+android/app/build/
+ios/build/
+apk-output/
+
+# Editor and local config
+.idea/
+.vscode/
+
+# Logs and temp files
+*.log
+*.tmp
