@@ -1,17 +1,47 @@
 node_modules
 
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs and temp files
+*.log
+*.tmp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test and coverage
+coverage/
+
 # Build and generated artifacts
 android/.cxx/
 android/app/.cxx/
+android/.gradle/
 android/build/
 android/app/build/
+android/local.properties
+android/app/debug.keystore
 ios/build/
 apk-output/
+
+# Bundles
+*.jsbundle
+
+# Local iOS files
+ios/.xcode.env
+ios/.xcode.env.local
 
 # Editor and local config
 .idea/
 .vscode/
 
-# Logs and temp files
-*.log
-*.tmp
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local tooling snapshots
+mobile_dev_context.md.resolved
