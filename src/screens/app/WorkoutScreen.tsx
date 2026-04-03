@@ -1,64 +1,197 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { format } from 'date-fns';
+import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppTextInput } from '@/components/ui/AppTextInput';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
+import { getSummary } from '@/services/summary';
 import { createWorkout, getWorkouts } from '@/services/workouts';
 import { colors } from '@/theme/tokens';
 import { WorkoutSession } from '@/types/api';
 
+type CalendarCell = {
+  key: string;
+  day: number;
+  date: string;
+  currentMonth: boolean;
+};
+
 export function WorkoutScreen() {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
-  const month = format(new Date(), 'yyyy-MM');
-  const monthLabel = format(new Date(), 'MMMM yyyy');
+  const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [sessionType, setSessionType] = useState('Strength');
 
+  const monthKey = format(currentMonth, 'yyyy-MM');
+
   const workoutsQuery = useQuery({
-    queryKey: ['workouts', month],
-    queryFn: () => getWorkouts(month),
+    queryKey: ['workouts', monthKey],
+    queryFn: () => getWorkouts(monthKey),
+  });
+
+  const summaryQuery = useQuery({
+    queryKey: ['summary', monthKey],
+    queryFn: () => getSummary(monthKey),
   });
 
   const createMutation = useMutation({
     mutationFn: () =>
       createWorkout({
-        scheduled_date: format(new Date(), 'yyyy-MM-dd'),
-        type: sessionType,
+        scheduled_date: selectedDate,
+        type: sessionType.trim() || 'Strength',
       }),
     onSuccess: () => {
-      setSessionType('Strength');
-      void queryClient.invalidateQueries({ queryKey: ['workouts', month] });
+      void Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['workouts', monthKey] }),
+        queryClient.invalidateQueries({ queryKey: ['summary', monthKey] }),
+      ]);
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'Failed to create workout';
-      Alert.alert('Error', message);
+      Alert.alert('Create Session Failed', message);
     },
   });
 
+  const sessionsByDate = useMemo(() => {
+    const map = new Map<string, WorkoutSession[]>();
+    for (const session of workoutsQuery.data ?? []) {
+      const key = session.scheduled_date.slice(0, 10);
+      const existing = map.get(key) ?? [];
+      existing.push(session);
+      map.set(key, existing);
+    }
+    return map;
+  }, [workoutsQuery.data]);
+
+  const calendarCells = useMemo<CalendarCell[]>(() => {
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
+    const dayCount = end.getDate();
+    const firstWeekday = (start.getDay() + 6) % 7; // Mon=0
+
+    const cells: CalendarCell[] = [];
+
+    for (let i = 0; i < firstWeekday; i += 1) {
+      const prevDate = new Date(start);
+      prevDate.setDate(start.getDate() - (firstWeekday - i));
+      cells.push({
+        key: `prev-${i}`,
+        day: prevDate.getDate(),
+        date: format(prevDate, 'yyyy-MM-dd'),
+        currentMonth: false,
+      });
+    }
+
+    for (let day = 1; day <= dayCount; day += 1) {
+      const dateObj = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+      cells.push({
+        key: `curr-${day}`,
+        day,
+        date: format(dateObj, 'yyyy-MM-dd'),
+        currentMonth: true,
+      });
+    }
+
+    while (cells.length % 7 !== 0) {
+      const nextDate = new Date(end);
+      nextDate.setDate(end.getDate() + (cells.length % 7));
+      cells.push({
+        key: `next-${cells.length}`,
+        day: nextDate.getDate(),
+        date: format(nextDate, 'yyyy-MM-dd'),
+        currentMonth: false,
+      });
+    }
+
+    return cells;
+  }, [currentMonth]);
+
+  const selectedSessions = sessionsByDate.get(selectedDate) ?? [];
+
+  const muscleSplit = summaryQuery.data?.muscle_split ?? [];
+
   return (
-    <Screen contentStyle={styles.screen}>
+    <Screen scroll contentStyle={styles.screen}>
       <View style={styles.heroCard}>
         <Text style={styles.kicker}>Ascent Performance</Text>
         <Text style={styles.title}>WORKOUT COMMAND</Text>
-        <Text style={styles.subtitle}>{monthLabel}</Text>
+        <Text style={styles.subtitle}>{format(currentMonth, 'MMMM yyyy')}</Text>
 
         <View style={styles.metricsRow}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Sessions</Text>
-            <Text style={styles.metricValue}>{workoutsQuery.data?.length ?? 0}</Text>
+            <Text style={styles.metricLabel}>GR Score</Text>
+            <Text style={styles.metricValue}>{summaryQuery.data?.gr_score ?? 0}</Text>
           </View>
           <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Status</Text>
-            <Text style={styles.metricValueSmall}>{workoutsQuery.isLoading ? 'Syncing' : 'Ready'}</Text>
+            <Text style={styles.metricLabel}>Streak</Text>
+            <Text style={styles.metricValue}>{summaryQuery.data?.longest_streak ?? 0}</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Workouts</Text>
+            <Text style={styles.metricValue}>{summaryQuery.data?.total_workouts ?? 0}</Text>
           </View>
         </View>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.label}>Quick Create Session</Text>
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Muscle Split</Text>
+        {muscleSplit.length === 0 ? (
+          <Text style={styles.muted}>No completed sessions for this month yet.</Text>
+        ) : (
+          muscleSplit.map((item) => (
+            <View key={item.name} style={styles.splitRow}>
+              <Text style={styles.splitLabel}>{item.name}</Text>
+              <View style={styles.splitTrack}>
+                <View style={[styles.splitFill, { width: `${Math.max(2, Math.min(100, item.value))}%` }]} />
+              </View>
+              <Text style={styles.splitValue}>{Math.round(item.value)}%</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <View style={styles.panel}>
+        <View style={styles.calendarHeader}>
+          <Text style={styles.panelTitle}>Calendar</Text>
+          <View style={styles.monthNav}>
+            <Pressable onPress={() => setCurrentMonth((prev) => addMonths(prev, -1))}>
+              <Text style={styles.monthNavText}>Prev</Text>
+            </Pressable>
+            <Pressable onPress={() => setCurrentMonth((prev) => addMonths(prev, 1))}>
+              <Text style={styles.monthNavText}>Next</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.weekRow}>
+          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) => (
+            <Text key={d} style={styles.weekCell}>{d}</Text>
+          ))}
+        </View>
+
+        <View style={styles.calendarGrid}>
+          {calendarCells.map((cell) => {
+            const hasSessions = (sessionsByDate.get(cell.date)?.length ?? 0) > 0;
+            const isSelected = selectedDate === cell.date;
+            return (
+              <Pressable
+                key={cell.key}
+                onPress={() => setSelectedDate(cell.date)}
+                style={[styles.dayCell, isSelected && styles.daySelected]}
+              >
+                <Text style={[styles.dayText, !cell.currentMonth && styles.dayOut, isSelected && styles.dayTextSelected]}>{cell.day}</Text>
+                {hasSessions ? <View style={styles.dot} /> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Quick Create</Text>
         <AppTextInput
           label="Session Type"
           onChangeText={setSessionType}
@@ -67,38 +200,34 @@ export function WorkoutScreen() {
           variant="underline"
         />
         <PrimaryButton
-          label={createMutation.isPending ? 'CREATING...' : 'CREATE TODAY SESSION'}
+          label={createMutation.isPending ? 'CREATING...' : `CREATE FOR ${format(new Date(selectedDate), 'dd MMM').toUpperCase()}`}
           onPress={() => createMutation.mutate()}
           variant="hero"
         />
       </View>
 
-      <Text style={styles.sectionTitle}>This Month Sessions</Text>
-
-      <FlatList
-        data={workoutsQuery.data ?? []}
-        keyExtractor={(item) => String(item.session_id)}
-        ListEmptyComponent={<Text style={styles.muted}>No sessions found yet.</Text>}
-        refreshing={workoutsQuery.isRefetching}
-        onRefresh={() => workoutsQuery.refetch()}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <WorkoutRow item={item} onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.session_id })} />
-        )}
-      />
-    </Screen>
-  );
-}
-
-function WorkoutRow({ item, onPress }: { item: WorkoutSession; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={styles.row}>
-      <View>
-        <Text style={styles.rowTitle}>{item.type ?? 'Workout Session'}</Text>
-        <Text style={styles.rowSub}>{format(new Date(item.scheduled_date), 'EEE, dd MMM')}</Text>
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Sessions On {format(new Date(selectedDate), 'dd MMM yyyy')}</Text>
+        <FlatList
+          data={selectedSessions}
+          keyExtractor={(item) => String(item.session_id)}
+          scrollEnabled={false}
+          ListEmptyComponent={<Text style={styles.muted}>No sessions on selected day.</Text>}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.session_id })}
+              style={styles.sessionRow}
+            >
+              <View>
+                <Text style={styles.sessionTitle}>{item.type ?? 'Workout Session'}</Text>
+                <Text style={styles.sessionSub}>{item.notes || 'Open details to log sets and reps'}</Text>
+              </View>
+              <Text style={[styles.badge, item.status === 'COMPLETED' ? styles.done : styles.progress]}>{item.status}</Text>
+            </Pressable>
+          )}
+        />
       </View>
-      <Text style={[styles.badge, item.status === 'COMPLETED' ? styles.done : styles.progress]}>{item.status}</Text>
-    </Pressable>
+    </Screen>
   );
 }
 
@@ -159,58 +288,133 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '900',
   },
-  metricValueSmall: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  card: {
+  panel: {
     borderWidth: 1,
     borderColor: 'rgba(244,244,245,0.16)',
-    borderRadius: 0,
-    padding: 14,
     backgroundColor: 'rgba(10,11,14,0.92)',
+    padding: 14,
     gap: 10,
   },
-  label: {
+  panelTitle: {
     color: colors.primary,
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     fontSize: 11,
     fontWeight: '700',
   },
-  sectionTitle: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
+  muted: {
+    color: 'rgba(244,244,245,0.5)',
+    textAlign: 'center',
     marginTop: 8,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
   },
-  listContent: {
-    paddingBottom: 12,
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  row: {
+  splitLabel: {
+    width: 70,
+    color: colors.textPrimary,
+    fontSize: 12,
+  },
+  splitTrack: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(244,244,245,0.12)',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  splitFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+  },
+  splitValue: {
+    width: 44,
+    color: colors.textPrimary,
+    textAlign: 'right',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  monthNav: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  monthNavText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  weekRow: {
+    flexDirection: 'row',
+  },
+  weekCell: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+    color: 'rgba(244,244,245,0.45)',
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.08)',
+    gap: 4,
+  },
+  daySelected: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59,130,246,0.18)',
+  },
+  dayText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+  },
+  dayTextSelected: {
+    fontWeight: '700',
+  },
+  dayOut: {
+    color: 'rgba(244,244,245,0.35)',
+  },
+  dot: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+  },
+  sessionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'rgba(12,14,18,0.96)',
-    borderRadius: 0,
     borderWidth: 1,
     borderColor: 'rgba(244,244,245,0.12)',
     padding: 12,
     marginBottom: 8,
+    gap: 8,
   },
-  rowTitle: {
+  sessionTitle: {
     color: colors.textPrimary,
     fontWeight: '700',
   },
-  rowSub: {
+  sessionSub: {
     color: 'rgba(244,244,245,0.5)',
-    marginTop: 2,
+    marginTop: 3,
+    maxWidth: 230,
+    fontSize: 12,
   },
   badge: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -224,10 +428,5 @@ const styles = StyleSheet.create({
   progress: {
     color: colors.orange,
     backgroundColor: '#2a1b0f',
-  },
-  muted: {
-    color: colors.textDim,
-    textAlign: 'center',
-    marginTop: 12,
   },
 });
