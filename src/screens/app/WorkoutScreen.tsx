@@ -14,6 +14,7 @@ export function WorkoutScreen() {
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const month = format(new Date(), 'yyyy-MM');
+  const monthLabel = format(new Date(), 'MMMM yyyy');
   const [sessionType, setSessionType] = useState('Strength');
 
   const workoutsQuery = useQuery({
@@ -38,13 +39,38 @@ export function WorkoutScreen() {
   });
 
   return (
-    <Screen>
-      <Text style={styles.title}>Workout</Text>
+    <Screen contentStyle={styles.screen}>
+      <View style={styles.heroCard}>
+        <Text style={styles.kicker}>Ascent Performance</Text>
+        <Text style={styles.title}>WORKOUT COMMAND</Text>
+        <Text style={styles.subtitle}>{monthLabel}</Text>
+
+        <View style={styles.metricsRow}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Sessions</Text>
+            <Text style={styles.metricValue}>{workoutsQuery.data?.length ?? 0}</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricLabel}>Status</Text>
+            <Text style={styles.metricValueSmall}>{workoutsQuery.isLoading ? 'Syncing' : 'Ready'}</Text>
+          </View>
+        </View>
+      </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Quick create session</Text>
-        <AppTextInput onChangeText={setSessionType} placeholder="Session type" value={sessionType} />
-        <PrimaryButton label={createMutation.isPending ? 'Creating...' : 'Create Today Session'} onPress={() => createMutation.mutate()} />
+        <Text style={styles.label}>Quick Create Session</Text>
+        <AppTextInput
+          label="Session Type"
+          onChangeText={setSessionType}
+          placeholder="Strength / Push / Pull / Cardio"
+          value={sessionType}
+          variant="underline"
+        />
+        <PrimaryButton
+          label={createMutation.isPending ? 'CREATING...' : 'CREATE TODAY SESSION'}
+          onPress={() => createMutation.mutate()}
+          variant="hero"
+        />
       </View>
 
       <Text style={styles.sectionTitle}>This Month Sessions</Text>
@@ -55,6 +81,7 @@ export function WorkoutScreen() {
         ListEmptyComponent={<Text style={styles.muted}>No sessions found yet.</Text>}
         refreshing={workoutsQuery.isRefetching}
         onRefresh={() => workoutsQuery.refetch()}
+        contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <WorkoutRow item={item} onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.session_id })} />
         )}
@@ -68,7 +95,7 @@ function WorkoutRow({ item, onPress }: { item: WorkoutSession; onPress: () => vo
     <Pressable onPress={onPress} style={styles.row}>
       <View>
         <Text style={styles.rowTitle}>{item.type ?? 'Workout Session'}</Text>
-        <Text style={styles.rowSub}>{item.scheduled_date}</Text>
+        <Text style={styles.rowSub}>{format(new Date(item.scheduled_date), 'EEE, dd MMM')}</Text>
       </View>
       <Text style={[styles.badge, item.status === 'COMPLETED' ? styles.done : styles.progress]}>{item.status}</Text>
     </Pressable>
@@ -76,37 +103,101 @@ function WorkoutRow({ item, onPress }: { item: WorkoutSession; onPress: () => vo
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    backgroundColor: '#060709',
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    gap: 14,
+  },
+  heroCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.38)',
+    backgroundColor: 'rgba(8,10,14,0.95)',
+    padding: 16,
+    gap: 8,
+  },
+  kicker: {
+    color: colors.primary,
+    fontSize: 10,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
   title: {
     color: colors.textPrimary,
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    color: 'rgba(244,244,245,0.55)',
+    fontWeight: '600',
+    letterSpacing: 0.6,
+  },
+  metricsRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  metricCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    gap: 4,
+  },
+  metricLabel: {
+    color: 'rgba(244,244,245,0.45)',
+    fontSize: 10,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+  },
+  metricValue: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '900',
+  },
+  metricValueSmall: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   card: {
     borderWidth: 1,
-    borderColor: colors.surfaceHighlight,
-    borderRadius: 14,
+    borderColor: 'rgba(244,244,245,0.16)',
+    borderRadius: 0,
     padding: 14,
-    backgroundColor: colors.surfaceCard,
+    backgroundColor: 'rgba(10,11,14,0.92)',
     gap: 10,
   },
   label: {
-    color: colors.textPrimary,
+    color: colors.primary,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    fontSize: 11,
     fontWeight: '700',
   },
   sectionTitle: {
     color: colors.textPrimary,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
     marginTop: 8,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+  },
+  listContent: {
+    paddingBottom: 12,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.surfaceCard,
-    borderRadius: 12,
+    backgroundColor: 'rgba(12,14,18,0.96)',
+    borderRadius: 0,
     borderWidth: 1,
-    borderColor: colors.surfaceHighlight,
+    borderColor: 'rgba(244,244,245,0.12)',
     padding: 12,
     marginBottom: 8,
   },
@@ -115,7 +206,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   rowSub: {
-    color: colors.textDim,
+    color: 'rgba(244,244,245,0.5)',
     marginTop: 2,
   },
   badge: {
