@@ -3,8 +3,7 @@ import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native
 import { useNavigation } from '@react-navigation/native';
 import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Svg, { Circle } from 'react-native-svg';
-import { AppTextInput } from '@/components/ui/AppTextInput';
+import Svg, { Path } from 'react-native-svg';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { getSummary } from '@/services/summary';
@@ -20,6 +19,22 @@ type CalendarCell = {
 };
 
 const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#A855F7', '#14B8A6', '#64748B'];
+const SESSION_TYPE_OPTIONS = ['Strength', 'Push', 'Pull', 'Legs', 'Cardio', 'Full Body'];
+
+function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(angleInRadians),
+    y: cy + radius * Math.sin(angleInRadians),
+  };
+}
+
+function describeSlice(cx: number, cy: number, radius: number, startAngle: number, endAngle: number) {
+  const start = polarToCartesian(cx, cy, radius, endAngle);
+  const end = polarToCartesian(cx, cy, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
+}
 
 export function WorkoutScreen() {
   const navigation = useNavigation<any>();
@@ -28,6 +43,7 @@ export function WorkoutScreen() {
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => todayKey);
   const [sessionType, setSessionType] = useState('Strength');
+  const [isSessionTypeOpen, setIsSessionTypeOpen] = useState(false);
 
   const monthKey = format(currentMonth, 'yyyy-MM');
 
@@ -45,13 +61,14 @@ export function WorkoutScreen() {
     mutationFn: () =>
       createWorkout({
         scheduled_date: selectedDate,
-        type: sessionType.trim() || 'Strength',
+        type: sessionType || 'Strength',
       }),
     onSuccess: () => {
       void Promise.all([
         queryClient.invalidateQueries({ queryKey: ['workouts', monthKey] }),
         queryClient.invalidateQueries({ queryKey: ['summary', monthKey] }),
       ]);
+      setIsSessionTypeOpen(false);
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'Failed to create workout';
@@ -152,31 +169,22 @@ export function WorkoutScreen() {
               <Svg width={160} height={160} viewBox="0 0 160 160">
                 {(() => {
                   const radius = 64;
-                  const strokeWidth = 128;
-                  const circumference = 2 * Math.PI * radius;
                   const total = muscleSplit.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
-                  let offset = 0;
+                  let startAngle = 0;
 
                   return muscleSplit.map((item, idx) => {
                     const ratio = Math.max(0, item.value) / total;
-                    const segment = circumference * ratio;
-                    const circle = (
-                      <Circle
+                    const sweep = Math.max(1, ratio * 360);
+                    const endAngle = startAngle + sweep;
+                    const slice = (
+                      <Path
                         key={item.name}
-                        cx={80}
-                        cy={80}
-                        r={radius}
-                        fill="transparent"
-                        stroke={PIE_COLORS[idx % PIE_COLORS.length]}
-                        strokeWidth={strokeWidth}
-                        strokeDasharray={`${segment} ${circumference - segment}`}
-                        strokeDashoffset={-offset}
-                        strokeLinecap="butt"
-                        transform="rotate(-90 80 80)"
+                        d={describeSlice(80, 80, radius, startAngle, endAngle)}
+                        fill={PIE_COLORS[idx % PIE_COLORS.length]}
                       />
                     );
-                    offset += segment;
-                    return circle;
+                    startAngle = endAngle;
+                    return slice;
                   });
                 })()}
               </Svg>
@@ -232,13 +240,33 @@ export function WorkoutScreen() {
 
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Quick Create</Text>
-        <AppTextInput
-          label="Session Type"
-          onChangeText={setSessionType}
-          placeholder="Strength / Push / Pull / Cardio"
-          value={sessionType}
-          variant="underline"
-        />
+        <Text style={styles.selectLabel}>Session Type</Text>
+        <Pressable
+          onPress={() => setIsSessionTypeOpen((prev) => !prev)}
+          style={styles.selectBox}
+        >
+          <Text style={styles.selectValue}>{sessionType}</Text>
+          <Text style={styles.selectChevron}>{isSessionTypeOpen ? '▲' : '▼'}</Text>
+        </Pressable>
+        {isSessionTypeOpen ? (
+          <View style={styles.selectMenu}>
+            {SESSION_TYPE_OPTIONS.map((option) => {
+              const isActive = option === sessionType;
+              return (
+                <Pressable
+                  key={option}
+                  onPress={() => {
+                    setSessionType(option);
+                    setIsSessionTypeOpen(false);
+                  }}
+                  style={[styles.selectOption, isActive && styles.selectOptionActive]}
+                >
+                  <Text style={[styles.selectOptionText, isActive && styles.selectOptionTextActive]}>{option}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         <PrimaryButton
           label={createMutation.isPending ? 'CREATING...' : `CREATE FOR ${format(new Date(selectedDate), 'dd MMM').toUpperCase()}`}
           onPress={() => createMutation.mutate()}
@@ -341,6 +369,54 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     fontSize: 11,
     fontWeight: '700',
+  },
+  selectLabel: {
+    color: 'rgba(244,244,245,0.65)',
+    fontSize: 11,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  selectBox: {
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.18)',
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectValue: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  selectChevron: {
+    color: 'rgba(244,244,245,0.72)',
+    fontSize: 12,
+  },
+  selectMenu: {
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.16)',
+    backgroundColor: 'rgba(12,14,18,0.98)',
+  },
+  selectOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244,244,245,0.08)',
+  },
+  selectOptionActive: {
+    backgroundColor: 'rgba(59,130,246,0.2)',
+  },
+  selectOptionText: {
+    color: 'rgba(244,244,245,0.82)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  selectOptionTextActive: {
+    color: colors.primary,
   },
   muted: {
     color: 'rgba(244,244,245,0.5)',
