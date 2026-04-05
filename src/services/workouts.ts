@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 import { apiFetch } from '@/lib/api/client';
-import { ExerciseLog, WorkoutSession } from '@/types/api';
+import { Exercise, ExerciseLog, WorkoutSession } from '@/types/api';
 
 export function getWorkouts(month = format(new Date(), 'yyyy-MM')): Promise<WorkoutSession[]> {
   return apiFetch(`/workouts?month=${month}`);
@@ -8,6 +8,10 @@ export function getWorkouts(month = format(new Date(), 'yyyy-MM')): Promise<Work
 
 export function getWorkoutById(sessionId: number | string): Promise<WorkoutSession> {
   return apiFetch(`/workouts/${sessionId}`);
+}
+
+export function getExercises(): Promise<Exercise[]> {
+  return apiFetch('/exercises');
 }
 
 export function createWorkout(payload: {
