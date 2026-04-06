@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { addMonths, endOfMonth, format, startOfMonth, subDays, addDays } from 'date-fns';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -26,6 +26,11 @@ type PlannedExercise = {
   name: string;
   planned_sets: number;
   planned_reps: number;
+};
+
+type ExerciseOption = {
+  exercise_id: number;
+  name: string;
 };
 
 function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
@@ -209,6 +214,24 @@ export function WorkoutScreen() {
   const removePlannedExercise = (exerciseId: number) => {
     setPlannedExercises((prev) => prev.filter((item) => item.exercise_id !== exerciseId));
   };
+
+  const exerciseOptions = useMemo<ExerciseOption[]>(() => {
+    const rawList = Array.isArray(exercisesQuery.data) ? exercisesQuery.data : [];
+    const seen = new Set<number>();
+
+    return rawList
+      .map((item, index) => {
+        const source = item as Exercise & { id?: number; title?: string };
+        const resolvedId = Number(source.exercise_id ?? source.id ?? 0) || index + 1;
+        const resolvedName = source.name ?? source.title ?? `Exercise ${resolvedId}`;
+        return { exercise_id: resolvedId, name: resolvedName };
+      })
+      .filter((item) => {
+        if (seen.has(item.exercise_id)) return false;
+        seen.add(item.exercise_id);
+        return true;
+      });
+  }, [exercisesQuery.data]);
 
   const confirmDeleteSession = (sessionId: number) => {
     Alert.alert('Delete Session', 'This will permanently delete this workout session.', [
@@ -422,12 +445,22 @@ export function WorkoutScreen() {
               <View style={styles.stepBlock}>
                 <Text style={styles.selectLabel}>Add Planned Exercises</Text>
                 {exercisesQuery.isLoading ? <Text style={styles.mutedInline}>Loading exercises...</Text> : null}
-                {(exercisesQuery.data ?? []).slice(0, 20).map((exercise) => (
-                  <Pressable key={exercise.exercise_id} style={styles.exercisePick} onPress={() => addPlannedExercise(exercise)}>
-                    <Text style={styles.exercisePickText}>{exercise.name}</Text>
-                    <Text style={styles.addSet}>+ Add</Text>
-                  </Pressable>
-                ))}
+
+                <ScrollView style={styles.exerciseList} nestedScrollEnabled>
+                  {exerciseOptions.slice(0, 40).map((exercise) => {
+                    const alreadyAdded = plannedExercises.some((p) => p.exercise_id === exercise.exercise_id);
+                    return (
+                      <Pressable
+                        key={exercise.exercise_id}
+                        style={styles.exercisePick}
+                        onPress={() => addPlannedExercise(exercise)}
+                      >
+                        <Text style={styles.exercisePickText}>{exercise.name}</Text>
+                        <Text style={alreadyAdded ? styles.addedTag : styles.addSet}>{alreadyAdded ? 'Added' : '+ Add'}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
 
                 {plannedExercises.length > 0 ? (
                   <View style={styles.plannedList}>
@@ -762,6 +795,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8,10,14,0.98)',
     padding: 14,
     gap: 10,
+    maxHeight: '88%',
   },
   modalTitle: {
     color: colors.textPrimary,
@@ -777,7 +811,13 @@ const styles = StyleSheet.create({
   },
   stepBlock: {
     gap: 8,
-    maxHeight: 420,
+    flexShrink: 1,
+  },
+  exerciseList: {
+    maxHeight: 240,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.12)',
+    paddingHorizontal: 8,
   },
   dateRow: {
     flexDirection: 'row',
@@ -840,6 +880,11 @@ const styles = StyleSheet.create({
   },
   addSet: {
     color: colors.primary,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  addedTag: {
+    color: colors.green,
     fontWeight: '700',
     fontSize: 12,
   },
