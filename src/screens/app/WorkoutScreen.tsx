@@ -31,6 +31,7 @@ type PlannedExercise = {
 type ExerciseOption = {
   exercise_id: number;
   name: string;
+  category?: string;
 };
 
 function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
@@ -62,6 +63,7 @@ export function WorkoutScreen() {
   const [createNote, setCreateNote] = useState('');
   const [isCreateTypeOpen, setIsCreateTypeOpen] = useState(false);
   const [plannedExercises, setPlannedExercises] = useState<PlannedExercise[]>([]);
+  const [exerciseSearch, setExerciseSearch] = useState('');
 
   const monthKey = format(currentMonth, 'yyyy-MM');
 
@@ -87,6 +89,7 @@ export function WorkoutScreen() {
         scheduled_date: createDate,
         type: createType || 'Strength',
         notes: createNote.trim() || undefined,
+        exercises: [],
       });
 
       if (plannedExercises.length > 0) {
@@ -196,11 +199,12 @@ export function WorkoutScreen() {
     setCreateNote('');
     setCreateStep(1);
     setPlannedExercises([]);
+    setExerciseSearch('');
     setIsCreateTypeOpen(false);
     setIsCreateModalOpen(true);
   };
 
-  const addPlannedExercise = (exercise: Exercise) => {
+  const addPlannedExercise = (exercise: ExerciseOption) => {
     setPlannedExercises((prev) => {
       if (prev.some((p) => p.exercise_id === exercise.exercise_id)) return prev;
       return [...prev, { exercise_id: exercise.exercise_id, name: exercise.name, planned_sets: 3, planned_reps: 10 }];
@@ -224,7 +228,7 @@ export function WorkoutScreen() {
         const source = item as Exercise & { id?: number; title?: string };
         const resolvedId = Number(source.exercise_id ?? source.id ?? 0) || index + 1;
         const resolvedName = source.name ?? source.title ?? `Exercise ${resolvedId}`;
-        return { exercise_id: resolvedId, name: resolvedName };
+        return { exercise_id: resolvedId, name: resolvedName, category: source.category || 'General' };
       })
       .filter((item) => {
         if (seen.has(item.exercise_id)) return false;
@@ -232,6 +236,27 @@ export function WorkoutScreen() {
         return true;
       });
   }, [exercisesQuery.data]);
+
+  const groupedExerciseOptions = useMemo(() => {
+    const query = exerciseSearch.trim().toLowerCase();
+    const filtered = query
+      ? exerciseOptions.filter((item) => item.name.toLowerCase().includes(query))
+      : exerciseOptions;
+
+    const groups = new Map<string, ExerciseOption[]>();
+    filtered.forEach((item) => {
+      const key = item.category || 'General';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(item);
+    });
+
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([category, items]) => ({
+        category,
+        items: items.sort((a, b) => a.name.localeCompare(b.name)),
+      }));
+  }, [exerciseOptions, exerciseSearch]);
 
   const confirmDeleteSession = (sessionId: number) => {
     Alert.alert('Delete Session', 'This will permanently delete this workout session.', [
@@ -444,22 +469,37 @@ export function WorkoutScreen() {
             ) : (
               <View style={styles.stepBlock}>
                 <Text style={styles.selectLabel}>Add Planned Exercises</Text>
+                <TextInput
+                  value={exerciseSearch}
+                  onChangeText={setExerciseSearch}
+                  placeholder="Search exercise by name"
+                  placeholderTextColor="rgba(244,244,245,0.35)"
+                  style={styles.searchInput}
+                />
                 {exercisesQuery.isLoading ? <Text style={styles.mutedInline}>Loading exercises...</Text> : null}
 
                 <ScrollView style={styles.exerciseList} nestedScrollEnabled>
-                  {exerciseOptions.slice(0, 40).map((exercise) => {
-                    const alreadyAdded = plannedExercises.some((p) => p.exercise_id === exercise.exercise_id);
-                    return (
-                      <Pressable
-                        key={exercise.exercise_id}
-                        style={styles.exercisePick}
-                        onPress={() => addPlannedExercise(exercise)}
-                      >
-                        <Text style={styles.exercisePickText}>{exercise.name}</Text>
-                        <Text style={alreadyAdded ? styles.addedTag : styles.addSet}>{alreadyAdded ? 'Added' : '+ Add'}</Text>
-                      </Pressable>
-                    );
-                  })}
+                  {groupedExerciseOptions.length === 0 && !exercisesQuery.isLoading ? (
+                    <Text style={styles.mutedInline}>No exercises match your search.</Text>
+                  ) : null}
+                  {groupedExerciseOptions.map((group) => (
+                    <View key={group.category} style={styles.groupBlock}>
+                      <Text style={styles.groupTitle}>{group.category}</Text>
+                      {group.items.map((exercise) => {
+                        const alreadyAdded = plannedExercises.some((p) => p.exercise_id === exercise.exercise_id);
+                        return (
+                          <Pressable
+                            key={exercise.exercise_id}
+                            style={styles.exercisePick}
+                            onPress={() => addPlannedExercise(exercise)}
+                          >
+                            <Text style={styles.exercisePickText}>{exercise.name}</Text>
+                            <Text style={alreadyAdded ? styles.addedTag : styles.addSet}>{alreadyAdded ? 'Added' : '+ Add'}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  ))}
                 </ScrollView>
 
                 {plannedExercises.length > 0 ? (
@@ -818,6 +858,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(244,244,245,0.12)',
     paddingHorizontal: 8,
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.18)',
+    color: colors.textPrimary,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    minHeight: 40,
+  },
+  groupBlock: {
+    paddingVertical: 4,
+  },
+  groupTitle: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 4,
   },
   dateRow: {
     flexDirection: 'row',

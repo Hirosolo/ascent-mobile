@@ -32,6 +32,7 @@ export function createWorkout(payload: {
   scheduled_date: string;
   type?: string;
   notes?: string;
+  exercises?: Array<{ exercise_id: number; actual_sets: number; actual_reps?: number }>;
 }): Promise<WorkoutSession> {
   return apiFetch('/workouts', {
     method: 'POST',
