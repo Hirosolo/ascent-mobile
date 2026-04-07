@@ -150,11 +150,12 @@ export function WorkoutDetailScreen() {
 
   const session = sessionQuery.data;
   const sessionDetails = session.session_details ?? [];
-  const effectiveState = Object.keys(setState).length === 0 ? initializedSets : setState;
+  // Merge initialized sets with user edits so updating one exercise does not hide others.
+  const effectiveState = { ...initializedSets, ...setState };
 
   const patchSet = (detailId: number, key: string, patch: Partial<EditableSet>) => {
     setSetState((prev) => {
-      const source = prev[detailId] ?? effectiveState[detailId] ?? [];
+      const source = prev[detailId] ?? initializedSets[detailId] ?? [];
       return {
         ...prev,
         [detailId]: source.map((item) => (item.key === key ? { ...item, ...patch } : item)),
@@ -164,7 +165,7 @@ export function WorkoutDetailScreen() {
 
   const addSet = (detailId: number) => {
     setSetState((prev) => {
-      const source = prev[detailId] ?? effectiveState[detailId] ?? [];
+      const source = prev[detailId] ?? initializedSets[detailId] ?? [];
       const newSet: EditableSet = {
         key: `${detailId}-new-${Date.now()}`,
         sessionDetailId: detailId,
@@ -188,7 +189,7 @@ export function WorkoutDetailScreen() {
       }
 
       setSetState((prev) => {
-        const source = prev[detailId] ?? effectiveState[detailId] ?? [];
+        const source = prev[detailId] ?? initializedSets[detailId] ?? [];
         return {
           ...prev,
           [detailId]: source.filter((item) => item.key !== set.key),
@@ -273,9 +274,12 @@ export function WorkoutDetailScreen() {
 
                 <Pressable
                   onPress={() => patchSet(detail.session_detail_id, set.key, { completed: !set.completed })}
-                  style={[styles.toggle, set.completed && styles.toggleDone]}
+                  style={[styles.checkButton, set.completed && styles.checkButtonDone]}
                 >
-                  <Text style={styles.toggleText}>{set.completed ? 'Done' : 'Todo'}</Text>
+                  <View style={[styles.checkbox, set.completed && styles.checkboxDone]}>
+                    {set.completed ? <Text style={styles.checkboxTick}>✓</Text> : null}
+                  </View>
+                  <Text style={styles.checkLabel}>Done</Text>
                 </Pressable>
 
                 <Pressable onPress={() => void removeSet(detail.session_detail_id, set)}>
@@ -399,19 +403,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     width: 30,
   },
-  toggle: {
+  checkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
     borderColor: 'rgba(244,244,245,0.25)',
     paddingHorizontal: 8,
     paddingVertical: 6,
-    minWidth: 52,
-    alignItems: 'center',
+    minWidth: 72,
   },
-  toggleDone: {
+  checkButtonDone: {
     borderColor: colors.green,
     backgroundColor: '#123021',
   },
-  toggleText: {
+  checkbox: {
+    width: 14,
+    height: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxDone: {
+    borderColor: colors.green,
+    backgroundColor: colors.green,
+  },
+  checkboxTick: {
+    color: '#06100a',
+    fontSize: 10,
+    fontWeight: '900',
+    lineHeight: 10,
+  },
+  checkLabel: {
     color: colors.textPrimary,
     fontSize: 11,
     fontWeight: '700',
