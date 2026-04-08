@@ -1,4 +1,5 @@
 import { Alert, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
@@ -8,6 +9,7 @@ import { colors } from '@/theme/tokens';
 
 export function NutritionScreen() {
   const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const date = format(new Date(), 'yyyy-MM-dd');
   const month = format(new Date(), 'yyyy-MM');
 
@@ -26,8 +28,17 @@ export function NutritionScreen() {
     },
   });
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([goalQuery.refetch(), mealsQuery.refetch(), waterQuery.refetch()]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
-    <Screen scroll>
+    <Screen scroll refreshing={isRefreshing} onRefresh={handleRefresh}>
       <Text style={styles.title}>Nutrition</Text>
 
       <View style={styles.card}>

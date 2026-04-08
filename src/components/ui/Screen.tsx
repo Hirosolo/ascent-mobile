@@ -1,5 +1,5 @@
 import { PropsWithChildren } from 'react';
-import { ScrollView, StyleSheet, View, ViewStyle, StyleProp } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View, ViewStyle, StyleProp } from 'react-native';
 import { Edge, SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '@/theme/tokens';
 
@@ -9,6 +9,8 @@ type ScreenProps = PropsWithChildren<{
   contentStyle?: StyleProp<ViewStyle>;
   safeStyle?: StyleProp<ViewStyle>;
   edges?: Edge[];
+  refreshing?: boolean;
+  onRefresh?: () => void;
 }>;
 
 export function Screen({
@@ -18,13 +20,19 @@ export function Screen({
   contentStyle,
   safeStyle,
   edges = ['top', 'bottom'],
+  refreshing = false,
+  onRefresh,
 }: ScreenProps) {
   const containerStyles = [styles.container, noPadding && styles.noPadding, contentStyle];
 
   if (scroll) {
     return (
       <SafeAreaView edges={edges} style={[styles.safe, safeStyle]}>
-        <ScrollView contentContainerStyle={containerStyles} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={containerStyles}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
+        >
           {children}
         </ScrollView>
       </SafeAreaView>

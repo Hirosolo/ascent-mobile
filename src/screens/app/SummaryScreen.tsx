@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { useQuery } from '@tanstack/react-query';
 import { Screen } from '@/components/ui/Screen';
@@ -7,10 +8,20 @@ import { colors } from '@/theme/tokens';
 
 export function SummaryScreen() {
   const month = format(new Date(), 'yyyy-MM');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const summaryQuery = useQuery({ queryKey: ['summary', month], queryFn: () => getSummary(month) });
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await summaryQuery.refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
-    <Screen>
+    <Screen scroll refreshing={isRefreshing} onRefresh={handleRefresh}>
       <Text style={styles.title}>Monthly Summary</Text>
       <Text style={styles.subtitle}>Month: {month}</Text>
 
