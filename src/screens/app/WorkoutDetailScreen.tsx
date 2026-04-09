@@ -46,10 +46,11 @@ export function WorkoutDetailScreen() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const exercises = sessionQuery.data?.session_details ?? [];
+      const mergedState = { ...initializedSets, ...setState };
 
       for (const exercise of exercises) {
         const detailId = exercise.session_detail_id;
-        const sets = setState[detailId] ?? [];
+        const sets = mergedState[detailId] ?? [];
 
         for (const set of sets) {
           const reps = Number(set.reps) || 0;
@@ -78,12 +79,15 @@ export function WorkoutDetailScreen() {
         }
       }
 
-      const allDone = Object.values(setState)
-        .flat()
-        .every((s) => s.completed);
+      const allDone = exercises.length > 0 && exercises.every((exercise) => {
+        const sets = mergedState[exercise.session_detail_id] ?? [];
+        return sets.length > 0 && sets.every((s) => s.completed);
+      });
 
       if (allDone) {
         await updateWorkout(sessionId, { status: 'COMPLETED' });
+      } else {
+        await updateWorkout(sessionId, { status: 'PENDING' });
       }
     },
     onSuccess: () => {
@@ -150,10 +154,12 @@ export function WorkoutDetailScreen() {
 
   const session = sessionQuery.data;
   const sessionDetails = session.session_details ?? [];
+  const isSessionCompleted = session.status === 'COMPLETED' || Boolean(session.completed);
   // Merge initialized sets with user edits so updating one exercise does not hide others.
   const effectiveState = { ...initializedSets, ...setState };
 
   const patchSet = (detailId: number, key: string, patch: Partial<EditableSet>) => {
+    if (isSessionCompleted) return;
     setSetState((prev) => {
       const source = prev[detailId] ?? initializedSets[detailId] ?? [];
       return {
@@ -164,6 +170,7 @@ export function WorkoutDetailScreen() {
   };
 
   const addSet = (detailId: number) => {
+    if (isSessionCompleted) return;
     setSetState((prev) => {
       const source = prev[detailId] ?? initializedSets[detailId] ?? [];
       const newSet: EditableSet = {
@@ -183,6 +190,7 @@ export function WorkoutDetailScreen() {
   };
 
   const removeSet = async (detailId: number, set: EditableSet) => {
+    if (isSessionCompleted) return;
     try {
       if (set.setId) {
         await deleteExerciseLog(set.setId);
@@ -202,6 +210,7 @@ export function WorkoutDetailScreen() {
   };
 
   const removeExercise = async (detail: SessionDetail) => {
+    if (isSessionCompleted) return;
     try {
       await removeExerciseFromWorkout(sessionId, detail.session_detail_id);
       await queryClient.invalidateQueries({ queryKey: ['workout-session', sessionId] });
@@ -233,8 +242,8 @@ export function WorkoutDetailScreen() {
                 <Text style={styles.exerciseName}>{detail.exercises?.name ?? `Exercise #${detail.exercise_id}`}</Text>
                 <Text style={styles.exerciseMeta}>{detail.exercises?.category || 'General'} {isCardio ? '• Cardio' : '• Strength'}</Text>
               </View>
-              <Pressable onPress={() => void removeExercise(detail)}>
-                <Text style={styles.deleteText}>Remove</Text>
+              <Pressable onPress={() => void removeExercise(detail)} disabled={isSessionCompleted}>
+                <Text style={[styles.deleteText, isSessionCompleted && styles.disabledText]}>Remove</Text>
               </Pressable>
             </View>
 
@@ -245,6 +254,7 @@ export function WorkoutDetailScreen() {
                 {!isCardio ? (
                   <>
                     <TextInput
+                      editable={!isSessionCompleted}
                       keyboardType="numeric"
                       onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { reps: v.replace(/[^0-9]/g, '') })}
                       style={styles.input}
@@ -253,6 +263,7 @@ export function WorkoutDetailScreen() {
                     <Text style={styles.inputLabel}>reps</Text>
 
                     <TextInput
+                      editable={!isSessionCompleted}
                       keyboardType="numeric"
                       onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { weight: v.replace(/[^0-9.]/g, '') })}
                       style={styles.input}
@@ -263,6 +274,7 @@ export function WorkoutDetailScreen() {
                 ) : (
                   <>
                     <TextInput
+                      editable={!isSessionCompleted}
                       keyboardType="numeric"
                       onChangeText={(v) => patchSet(detail.session_detail_id, set.key, { duration: v.replace(/[^0-9]/g, '') })}
                       style={styles.inputWide}
@@ -275,6 +287,7 @@ export function WorkoutDetailScreen() {
                 <Pressable
                   onPress={() => patchSet(detail.session_detail_id, set.key, { completed: !set.completed })}
                   style={[styles.checkButton, set.completed && styles.checkButtonDone]}
+                  disabled={isSessionCompleted}
                 >
                   <View style={[styles.checkbox, set.completed && styles.checkboxDone]}>
                     {set.completed ? <Text style={styles.checkboxTick}>✓</Text> : null}
@@ -282,24 +295,31 @@ export function WorkoutDetailScreen() {
                   <Text style={styles.checkLabel}>Done</Text>
                 </Pressable>
 
-                <Pressable onPress={() => void removeSet(detail.session_detail_id, set)}>
+                <Pressable onPress={() => void removeSet(detail.session_detail_id, set)} disabled={isSessionCompleted}>
                   <Text style={styles.deleteSet}>Del</Text>
                 </Pressable>
               </View>
             ))}
 
-            <Pressable onPress={() => addSet(detail.session_detail_id)}>
+            <Pressable onPress={() => addSet(detail.session_detail_id)} disabled={isSessionCompleted}>
               <Text style={styles.addSet}>+ Add Set</Text>
             </Pressable>
           </View>
         );
       })}
 
-      <PrimaryButton
-        label={saveMutation.isPending ? 'SAVING...' : 'SAVE WORKOUT CHANGES'}
-        onPress={() => saveMutation.mutate()}
-        variant="hero"
-      />
+      {isSessionCompleted ? (
+        <View style={styles.missionCard}>
+          <Text style={styles.missionTitle}>Mission Accomplished</Text>
+          <Text style={styles.missionText}>Workout session completed. Editing is locked.</Text>
+        </View>
+      ) : (
+        <PrimaryButton
+          label={saveMutation.isPending ? 'SAVING...' : 'SAVE WORKOUT CHANGES'}
+          onPress={() => saveMutation.mutate()}
+          variant="hero"
+        />
+      )}
     </Screen>
   );
 }
@@ -369,6 +389,9 @@ const styles = StyleSheet.create({
     color: '#fda4af',
     fontWeight: '700',
     fontSize: 12,
+  },
+  disabledText: {
+    opacity: 0.35,
   },
   setRow: {
     flexDirection: 'row',
@@ -450,5 +473,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
     marginTop: 2,
+  },
+  missionCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.35)',
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    padding: 16,
+    gap: 4,
+  },
+  missionTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  missionText: {
+    color: 'rgba(167,243,208,0.95)',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
