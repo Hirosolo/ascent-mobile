@@ -826,12 +826,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   done: {
-    color: colors.green,
-    backgroundColor: '#0f2015',
+    color: colors.primary,
+    backgroundColor: 'rgba(59,130,246,0.16)',
   },
   progress: {
-    color: colors.orange,
-    backgroundColor: '#2a1b0f',
+    color: colors.accent,
+    backgroundColor: 'rgba(37,99,235,0.18)',
   },
   modalOverlay: {
     flex: 1,

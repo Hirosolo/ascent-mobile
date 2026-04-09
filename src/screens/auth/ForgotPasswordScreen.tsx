@@ -155,12 +155,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   error: {
-    color: '#fda4af',
+    color: '#93c5fd',
     textAlign: 'center',
     fontSize: 12,
   },
   success: {
-    color: '#86efac',
+    color: '#60a5fa',
     textAlign: 'center',
     fontSize: 12,
   },

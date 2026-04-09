@@ -1,27 +1,456 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import { apiFetch } from '@/lib/api/client';
+import { getSecureItem, SECURE_KEYS } from '@/lib/storage/secure';
 import { NutritionGoal } from '@/types/api';
 
-export type WaterResponse = {
+export type MacroTotals = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber: number;
+  water: number;
+};
+
+export type NormalisedMeal = {
+  id: number;
+  meal_id: number;
+  name: string;
+  mealType: string;
+  time: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber: number;
+  raw: ApiMeal;
+};
+
+export type MealFoodItem = {
+  meal_detail_id?: number;
+  food_id?: number;
+  name: string;
+  unit_type?: string;
+  numbers_of_serving?: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber: number;
+  sugars?: number;
+  zinc?: number;
+  magnesium?: number;
+  calcium?: number;
+  iron?: number;
+  vitamin_a?: number;
+  vitamin_c?: number;
+  vitamin_b12?: number;
+  vitamin_d?: number;
+};
+
+export type MealDetail = {
+  meal_id: number;
+  meal_type: string;
+  log_date: string;
+  foods: MealFoodItem[];
+};
+
+export type FoodItem = {
+  food_id: number;
+  name: string;
+  calories_per_serving: number;
+  protein_per_serving: number;
+  carbs_per_serving: number;
+  fat_per_serving: number;
+  fibers_per_serving?: number;
+  sugars_per_serving?: number;
+  zincs_per_serving?: number;
+  magnesiums_per_serving?: number;
+  calciums_per_serving?: number;
+  irons_per_serving?: number;
+  vitamin_a_per_serving?: number;
+  vitamin_c_per_serving?: number;
+  vitamin_b12_per_serving?: number;
+  vitamin_d_per_serving?: number;
+  unit_type?: string;
+  serving_type?: string;
+};
+
+type WaterResponse = {
   total_ml: number;
   goal_ml: number;
 };
 
-export function getGoal(): Promise<NutritionGoal> {
-  return apiFetch('/nutrition/goals');
+type ApiMeal = {
+  meal_id: number;
+  meal_type: string;
+  log_date: string;
+  total_calories?: number;
+  total_protein?: number;
+  total_carbs?: number;
+  total_fat?: number;
+  total_fibers?: number;
+  total_fiber?: number;
+};
+
+type FoodsSyncResponse = {
+  changed: 0 | 1;
+  version: string;
+  data?: FoodItem[];
+};
+
+const CACHE_DATE_FORMAT = 'dd-MM-yyyy';
+
+function toNumber(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
-export function getMeals(month = format(new Date(), 'yyyy-MM')): Promise<unknown[]> {
-  return apiFetch(`/meals?month=${month}`);
+function titleizeMealType(rawType: string | null | undefined): string {
+  const normalized = (rawType ?? 'other').trim().toLowerCase();
+  switch (normalized) {
+    case 'breakfast':
+      return 'Breakfast';
+    case 'lunch':
+      return 'Lunch';
+    case 'dinner':
+      return 'Dinner';
+    case 'snack':
+    case 'snacks':
+      return 'Snacks';
+    case 'supplement':
+    case 'supplements':
+      return 'Supplements';
+    case 'pre-workout':
+      return 'Pre-Workout';
+    case 'post-workout':
+      return 'Post-Workout';
+    default:
+      return 'Other';
+  }
 }
 
-export function addWater(amount_ml: number, log_date: string): Promise<{ success: boolean }> {
-  return apiFetch('/nutrition/water', {
-    method: 'POST',
-    body: JSON.stringify({ amount_ml, log_date }),
+function getTodayCacheDate(): string {
+  return format(new Date(), CACHE_DATE_FORMAT);
+}
+
+async function getCacheUserId(): Promise<string> {
+  const authUserRaw = await getSecureItem(SECURE_KEYS.authUser);
+  if (!authUserRaw) return 'guest';
+
+  try {
+    const parsed = JSON.parse(authUserRaw) as { user_id?: number; id?: number };
+    return String(parsed.user_id ?? parsed.id ?? 'guest');
+  } catch {
+    return 'guest';
+  }
+}
+
+function buildMealMonthCacheKeys(month: string, userId: string) {
+  return {
+    data: `meals_month_${month}_${userId}`,
+    fetched: `meals_fetched_${month}_${userId}`,
+  };
+}
+
+function buildGoalDateCacheKey(dateStr: string, userId: string) {
+  return `goal_date_${dateStr}_${userId}`;
+}
+
+function buildWaterDateCacheKey(dateStr: string, userId: string) {
+  return `water_date_${dateStr}_${userId}`;
+}
+
+function parseDateKey(logDate: string): string {
+  return (logDate || '').slice(0, 10);
+}
+
+export function normaliseMeals(rawMeals: ApiMeal[]): NormalisedMeal[] {
+  return rawMeals.map((meal) => {
+    const time = meal.log_date && meal.log_date.length >= 16 ? meal.log_date.slice(11, 16) : '--:--';
+    const calories = toNumber(meal.total_calories);
+    const protein = toNumber(meal.total_protein);
+    const carbs = toNumber(meal.total_carbs);
+    const fats = toNumber(meal.total_fat);
+    const fiber = toNumber(meal.total_fibers ?? meal.total_fiber);
+
+    return {
+      id: meal.meal_id,
+      meal_id: meal.meal_id,
+      name: `${titleizeMealType(meal.meal_type)} Meal`,
+      mealType: titleizeMealType(meal.meal_type),
+      time,
+      calories,
+      protein,
+      carbs,
+      fats,
+      fiber,
+      raw: meal,
+    };
   });
 }
 
-export function getWater(date = format(new Date(), 'yyyy-MM-dd')): Promise<WaterResponse> {
-  return apiFetch(`/nutrition/water?date=${date}`);
+export function reduceDailyMacros(meals: NormalisedMeal[], waterMl: number): MacroTotals {
+  const totals = meals.reduce<MacroTotals>(
+    (acc, meal) => ({
+      calories: acc.calories + meal.calories,
+      protein: acc.protein + meal.protein,
+      carbs: acc.carbs + meal.carbs,
+      fats: acc.fats + meal.fats,
+      fiber: acc.fiber + meal.fiber,
+      water: acc.water,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, water: waterMl },
+  );
+
+  totals.water = waterMl;
+  return totals;
+}
+
+export async function fetchNutritionGoal(dateStr: string, forceRefresh = false): Promise<NutritionGoal> {
+  const userId = await getCacheUserId();
+  const cacheKey = buildGoalDateCacheKey(dateStr, userId);
+
+  if (forceRefresh) {
+    await AsyncStorage.removeItem(cacheKey);
+  }
+
+  const cached = await AsyncStorage.getItem(cacheKey);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as NutritionGoal;
+    } catch {
+      await AsyncStorage.removeItem(cacheKey);
+    }
+  }
+
+  const goal = await apiFetch<NutritionGoal>(`/nutrition/goals?date=${dateStr}`);
+  await AsyncStorage.setItem(cacheKey, JSON.stringify(goal));
+  return goal;
+}
+
+export async function fetchMealsByDate(dateStr: string, month: string, forceRefresh = false): Promise<NormalisedMeal[]> {
+  const userId = await getCacheUserId();
+  const keys = buildMealMonthCacheKeys(month, userId);
+  const today = getTodayCacheDate();
+
+  if (forceRefresh) {
+    await AsyncStorage.multiRemove([keys.data, keys.fetched]);
+  }
+
+  const [cachedDataRaw, fetchedDayRaw] = await AsyncStorage.multiGet([keys.data, keys.fetched]);
+  const cachedMeals = cachedDataRaw?.[1];
+  const cachedFetchedDay = fetchedDayRaw?.[1];
+
+  if (cachedMeals && cachedFetchedDay === today) {
+    try {
+      const parsed = JSON.parse(cachedMeals) as ApiMeal[];
+      return normaliseMeals(parsed).filter((meal) => parseDateKey(meal.raw.log_date) === dateStr);
+    } catch {
+      await AsyncStorage.multiRemove([keys.data, keys.fetched]);
+    }
+  }
+
+  const monthlyMeals = await apiFetch<ApiMeal[]>(`/meals?month=${month}`);
+  await AsyncStorage.multiSet([
+    [keys.data, JSON.stringify(monthlyMeals)],
+    [keys.fetched, today],
+  ]);
+
+  return normaliseMeals(monthlyMeals).filter((meal) => parseDateKey(meal.raw.log_date) === dateStr);
+}
+
+export async function updateMealsMonthCacheAfterCreate(month: string, appendedMeal: ApiMeal): Promise<void> {
+  const userId = await getCacheUserId();
+  const keys = buildMealMonthCacheKeys(month, userId);
+  const current = await AsyncStorage.getItem(keys.data);
+  if (!current) return;
+
+  try {
+    const parsed = JSON.parse(current) as ApiMeal[];
+    parsed.push(appendedMeal);
+    await AsyncStorage.setItem(keys.data, JSON.stringify(parsed));
+  } catch {
+    await AsyncStorage.removeItem(keys.data);
+  }
+}
+
+export async function updateMealsMonthCacheAfterDelete(month: string, mealId: number): Promise<void> {
+  const userId = await getCacheUserId();
+  const keys = buildMealMonthCacheKeys(month, userId);
+  const current = await AsyncStorage.getItem(keys.data);
+  if (!current) return;
+
+  try {
+    const parsed = JSON.parse(current) as ApiMeal[];
+    const next = parsed.filter((meal) => meal.meal_id !== mealId);
+    await AsyncStorage.setItem(keys.data, JSON.stringify(next));
+  } catch {
+    await AsyncStorage.removeItem(keys.data);
+  }
+}
+
+export async function fetchWaterDaily(dateStr: string, forceRefresh = false): Promise<WaterResponse> {
+  const userId = await getCacheUserId();
+  const key = buildWaterDateCacheKey(dateStr, userId);
+
+  if (forceRefresh) {
+    await AsyncStorage.removeItem(key);
+  }
+
+  const cached = await AsyncStorage.getItem(key);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as WaterResponse;
+    } catch {
+      await AsyncStorage.removeItem(key);
+    }
+  }
+
+  const response = await apiFetch<WaterResponse>(`/nutrition/water?date=${dateStr}`);
+  await AsyncStorage.setItem(key, JSON.stringify(response));
+  return response;
+}
+
+export async function invalidateDailyCaches(dateStr: string, month: string): Promise<void> {
+  const userId = await getCacheUserId();
+  const goalKey = buildGoalDateCacheKey(dateStr, userId);
+  const waterKey = buildWaterDateCacheKey(dateStr, userId);
+  const mealsKeys = buildMealMonthCacheKeys(month, userId);
+  await AsyncStorage.multiRemove([goalKey, waterKey, mealsKeys.data, mealsKeys.fetched]);
+}
+
+export async function logWater(amount_ml: number, date: string): Promise<void> {
+  await apiFetch('/nutrition/water', {
+    method: 'POST',
+    body: JSON.stringify({ amount_ml, date }),
+  });
+
+  const userId = await getCacheUserId();
+  await AsyncStorage.removeItem(buildWaterDateCacheKey(date, userId));
+}
+
+export async function fetchFoods(searchQuery = ''): Promise<FoodItem[]> {
+  const query = searchQuery.trim();
+  if (query.length > 1) {
+    return apiFetch<FoodItem[]>(`/foods?search=${encodeURIComponent(query)}`);
+  }
+
+  const storedVersion = await AsyncStorage.getItem('foods_version');
+  const storedFoodsRaw = await AsyncStorage.getItem('foods_data');
+
+  const currentFoods = (() => {
+    if (!storedFoodsRaw) return [] as FoodItem[];
+    try {
+      return JSON.parse(storedFoodsRaw) as FoodItem[];
+    } catch {
+      return [] as FoodItem[];
+    }
+  })();
+
+  const syncPath = storedVersion ? `/foods?version=${storedVersion}` : '/foods';
+  const syncResponse = await apiFetch<FoodsSyncResponse | FoodItem[]>(syncPath);
+
+  if (Array.isArray(syncResponse)) {
+    await AsyncStorage.setItem('foods_data', JSON.stringify(syncResponse));
+    return syncResponse;
+  }
+
+  if (syncResponse.changed === 0) {
+    return currentFoods;
+  }
+
+  const updates = syncResponse.data ?? [];
+  const byId = new Map<number, FoodItem>();
+  currentFoods.forEach((food) => byId.set(food.food_id, food));
+  updates.forEach((food) => byId.set(food.food_id, food));
+  const merged = Array.from(byId.values());
+
+  await AsyncStorage.multiSet([
+    ['foods_data', JSON.stringify(merged)],
+    ['foods_version', syncResponse.version],
+  ]);
+
+  return merged;
+}
+
+export function createMeal(payload: {
+  meal_type: string;
+  log_date: string;
+  details: Array<{ food_id: number; numbers_of_serving: number }>;
+}): Promise<{ meal_id: number }> {
+  return apiFetch('/meals', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteMeal(mealId: number): Promise<{ message?: string }> {
+  return apiFetch(`/meals/${mealId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getMealDetail(mealId: number): Promise<MealDetail> {
+  const detail = await apiFetch<{
+    meal_id: number;
+    meal_type: string;
+    log_date: string;
+    foods?: Array<Record<string, unknown>>;
+  }>(`/meals/${mealId}`);
+
+  const foods = (detail.foods ?? []).map((item) => ({
+    meal_detail_id: toNumber(item.meal_detail_id),
+    food_id: toNumber(item.food_id),
+    name: String(item.food_name ?? item.name ?? 'Food'),
+    unit_type: String(item.unit_type ?? item.serving_type ?? ''),
+    numbers_of_serving: toNumber(item.numbers_of_serving),
+    calories: toNumber(item.total_calories),
+    protein: toNumber(item.total_protein),
+    carbs: toNumber(item.total_carbs),
+    fats: toNumber(item.total_fat),
+    fiber: toNumber(item.total_fibers ?? item.total_fiber),
+    sugars: toNumber(item.total_sugars),
+    zinc: toNumber(item.total_zincs),
+    magnesium: toNumber(item.total_magnesiums),
+    calcium: toNumber(item.total_calciums),
+    iron: toNumber(item.total_irons),
+    vitamin_a: toNumber(item.total_vitamin_a),
+    vitamin_c: toNumber(item.total_vitamin_c),
+    vitamin_b12: toNumber(item.total_vitamin_b12),
+    vitamin_d: toNumber(item.total_vitamin_d),
+  }));
+
+  return {
+    meal_id: detail.meal_id,
+    meal_type: detail.meal_type,
+    log_date: detail.log_date,
+    foods,
+  };
+}
+
+export async function getMealDetailsFallback(mealId: number): Promise<MealFoodItem[]> {
+  const rows = await apiFetch<Array<Record<string, unknown>>>(`/meal-details?meal_id=${mealId}`);
+  return rows.map((item) => ({
+    meal_detail_id: toNumber(item.meal_detail_id),
+    food_id: toNumber(item.food_id),
+    name: String(item.name ?? item.food_name ?? 'Food'),
+    unit_type: String(item.serving_type ?? item.unit_type ?? ''),
+    numbers_of_serving: toNumber(item.numbers_of_serving ?? item.amount_grams),
+    calories: toNumber(item.total_calories ?? item.calories_per_serving),
+    protein: toNumber(item.total_protein ?? item.protein_per_serving),
+    carbs: toNumber(item.total_carbs ?? item.carbs_per_serving),
+    fats: toNumber(item.total_fat ?? item.fat_per_serving),
+    fiber: toNumber(item.total_fibers ?? item.fibers_per_serving),
+    sugars: toNumber(item.total_sugars ?? item.sugars_per_serving),
+    zinc: toNumber(item.total_zincs ?? item.zincs_per_serving),
+    magnesium: toNumber(item.total_magnesiums ?? item.magnesiums_per_serving),
+    calcium: toNumber(item.total_calciums ?? item.calciums_per_serving),
+    iron: toNumber(item.total_irons ?? item.irons_per_serving),
+    vitamin_a: toNumber(item.total_vitamin_a ?? item.vitamin_a_per_serving),
+    vitamin_c: toNumber(item.total_vitamin_c ?? item.vitamin_c_per_serving),
+    vitamin_b12: toNumber(item.total_vitamin_b12 ?? item.vitamin_b12_per_serving),
+    vitamin_d: toNumber(item.total_vitamin_d ?? item.vitamin_d_per_serving),
+  }));
 }

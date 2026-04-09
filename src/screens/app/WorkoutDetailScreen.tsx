@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   deleteText: {
-    color: '#fda4af',
+    color: colors.red,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -437,8 +437,8 @@ const styles = StyleSheet.create({
     minWidth: 72,
   },
   checkButtonDone: {
-    borderColor: colors.green,
-    backgroundColor: '#123021',
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59,130,246,0.18)',
   },
   checkbox: {
     width: 14,
@@ -449,11 +449,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxDone: {
-    borderColor: colors.green,
-    backgroundColor: colors.green,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
   },
   checkboxTick: {
-    color: '#06100a',
+    color: '#ffffff',
     fontSize: 10,
     fontWeight: '900',
     lineHeight: 10,
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   deleteSet: {
-    color: '#fda4af',
+    color: colors.red,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -476,8 +476,8 @@ const styles = StyleSheet.create({
   },
   missionCard: {
     borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.35)',
-    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderColor: 'rgba(59,130,246,0.35)',
+    backgroundColor: 'rgba(59,130,246,0.12)',
     padding: 16,
     gap: 4,
   },
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   missionText: {
-    color: 'rgba(167,243,208,0.95)',
+    color: 'rgba(191,219,254,0.95)',
     fontSize: 12,
     fontWeight: '600',
   },

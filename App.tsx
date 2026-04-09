@@ -85,7 +85,7 @@ function HomeTabs() {
         component={WorkoutScreen}
         name="Workout"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="run-fast" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="dumbbell" size={size} />,
         }}
       />
       <Tab.Screen
@@ -99,21 +99,21 @@ function HomeTabs() {
         component={SummaryScreen}
         name="Summary"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="chart-areaspline" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="chart-line" size={size} />,
         }}
       />
       <Tab.Screen
         component={ProgramsScreen}
         name="Programs"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="notebook-edit-outline" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="school" size={size} />,
         }}
       />
       <Tab.Screen
         component={ProfileScreen}
         name="Profile"
         options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="account-star-outline" size={size} />,
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="account" size={size} />,
         }}
       />
     </Tab.Navigator>
