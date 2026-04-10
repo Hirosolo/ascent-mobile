@@ -71,14 +71,33 @@ export type SummaryData = {
   total_workouts: number;
   total_volume?: number;
   gr_score: number;
+  gr_avg?: number;
   gr_score_change: number;
   longest_streak: number;
   muscle_split?: MuscleSplitItem[];
   calories_avg: number;
   protein_avg: number;
-  carbs_avg: number;
-  fats_avg: number;
-  daily_data?: Array<{ date: string; workouts: number; gr: number }>;
+  carbs_avg?: number;
+  fats_avg?: number;
+  fiber_avg?: number;
+  daily_data?: Array<{
+    date: string;
+    workouts: number;
+    kcal?: number;
+    protein?: number;
+    carbs?: number;
+    fats?: number;
+    fiber?: number;
+    sugar?: number;
+    gr: number;
+    water?: number;
+  }>;
+  exercise_data?: Array<{
+    name: string;
+    count: number;
+    volume: number;
+    history: Array<{ date: string; weight: number; reps: number }>;
+  }>;
 };
 
 export type NutritionGoal = {

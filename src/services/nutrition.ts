@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format } from 'date-fns';
 import { apiFetch } from '@/lib/api/client';
 import { getSecureItem, SECURE_KEYS } from '@/lib/storage/secure';
+import { invalidateAllSummaryCaches, invalidateSummaryCache } from '@/services/summary';
 import { NutritionGoal } from '@/types/api';
 
 export type MacroTotals = {
@@ -329,16 +330,20 @@ export async function logWater(amount_ml: number, date: string): Promise<void> {
 
   const userId = await getCacheUserId();
   await AsyncStorage.removeItem(buildWaterDateCacheKey(date, userId));
+  await invalidateSummaryCache(date.slice(0, 7));
 }
 
 export async function fetchFoods(searchQuery = ''): Promise<FoodItem[]> {
+  const userId = await getCacheUserId();
+  const foodsVersionKey = `foods_version_${userId}`;
+  const foodsDataKey = `foods_data_${userId}`;
   const query = searchQuery.trim();
   if (query.length > 1) {
     return apiFetch<FoodItem[]>(`/foods?search=${encodeURIComponent(query)}`);
   }
 
-  const storedVersion = await AsyncStorage.getItem('foods_version');
-  const storedFoodsRaw = await AsyncStorage.getItem('foods_data');
+  const storedVersion = await AsyncStorage.getItem(foodsVersionKey);
+  const storedFoodsRaw = await AsyncStorage.getItem(foodsDataKey);
 
   const currentFoods = (() => {
     if (!storedFoodsRaw) return [] as FoodItem[];
@@ -353,7 +358,7 @@ export async function fetchFoods(searchQuery = ''): Promise<FoodItem[]> {
   const syncResponse = await apiFetch<FoodsSyncResponse | FoodItem[]>(syncPath);
 
   if (Array.isArray(syncResponse)) {
-    await AsyncStorage.setItem('foods_data', JSON.stringify(syncResponse));
+    await AsyncStorage.setItem(foodsDataKey, JSON.stringify(syncResponse));
     return syncResponse;
   }
 
@@ -368,8 +373,8 @@ export async function fetchFoods(searchQuery = ''): Promise<FoodItem[]> {
   const merged = Array.from(byId.values());
 
   await AsyncStorage.multiSet([
-    ['foods_data', JSON.stringify(merged)],
-    ['foods_version', syncResponse.version],
+    [foodsDataKey, JSON.stringify(merged)],
+    [foodsVersionKey, syncResponse.version],
   ]);
 
   return merged;
@@ -380,15 +385,21 @@ export function createMeal(payload: {
   log_date: string;
   details: Array<{ food_id: number; numbers_of_serving: number }>;
 }): Promise<{ meal_id: number }> {
-  return apiFetch('/meals', {
+  return apiFetch<{ meal_id: number }>('/meals', {
     method: 'POST',
     body: JSON.stringify(payload),
+  }).then(async (result) => {
+    await invalidateSummaryCache(payload.log_date.slice(0, 7));
+    return result;
   });
 }
 
 export function deleteMeal(mealId: number): Promise<{ message?: string }> {
-  return apiFetch(`/meals/${mealId}`, {
+  return apiFetch<{ message?: string }>(`/meals/${mealId}`, {
     method: 'DELETE',
+  }).then(async (result) => {
+    await invalidateAllSummaryCaches();
+    return result;
   });
 }
 

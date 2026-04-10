@@ -430,9 +430,6 @@ export function NutritionScreen() {
           <Text style={styles.title}>NUTRITION TERMINAL</Text>
           <Text style={styles.dateText}>{format(selectedDate, 'MMM dd, yyyy')}</Text>
         </View>
-        <Pressable style={styles.refreshBtn} onPress={handleRefresh}>
-          <MaterialCommunityIcons color={colors.textPrimary} name={isRefreshing ? 'loading' : 'refresh'} size={18} />
-        </Pressable>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
@@ -956,16 +953,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
-  },
-  refreshBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   dateStrip: {
     gap: 8,
