@@ -113,3 +113,26 @@ export type Program = {
   name: string;
   description?: string;
 };
+
+export type WorkoutDayPlanExercise = {
+  plan_exercise_id: number;
+  exercise_id: number;
+  planned_sets: number;
+  planned_reps: number;
+  sort_order?: number;
+  exercise?: {
+    exercise_id: number;
+    name: string;
+    category?: string;
+    type?: string;
+  };
+};
+
+export type WorkoutDayPlan = {
+  plan_id: number;
+  user_id: number;
+  name: string;
+  type?: string | null;
+  notes?: string | null;
+  exercises: WorkoutDayPlanExercise[];
+};
