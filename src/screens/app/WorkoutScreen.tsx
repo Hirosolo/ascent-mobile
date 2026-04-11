@@ -7,9 +7,9 @@ import Svg, { Path } from 'react-native-svg';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import { getSummary } from '@/services/summary';
-import { addExercisesToWorkout, createWorkout, deleteWorkout, getExercises, getWorkouts } from '@/services/workouts';
+import { addExercisesToWorkout, createWorkout, deleteWorkout, getExercises, getWorkoutDayPlans, getWorkouts } from '@/services/workouts';
 import { colors } from '@/theme/tokens';
-import { Exercise, WorkoutSession } from '@/types/api';
+import { Exercise, WorkoutDayPlan, WorkoutSession } from '@/types/api';
 
 type CalendarCell = {
   key: string;
@@ -62,7 +62,9 @@ export function WorkoutScreen() {
   const [createType, setCreateType] = useState('Strength');
   const [createNote, setCreateNote] = useState('');
   const [isCreateTypeOpen, setIsCreateTypeOpen] = useState(false);
+  const [isPlanSelectorOpen, setIsPlanSelectorOpen] = useState(false);
   const [plannedExercises, setPlannedExercises] = useState<PlannedExercise[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -81,6 +83,12 @@ export function WorkoutScreen() {
   const exercisesQuery = useQuery({
     queryKey: ['exercises-master'],
     queryFn: () => getExercises(),
+    enabled: isCreateModalOpen,
+  });
+
+  const plansQuery = useQuery({
+    queryKey: ['workout-day-plans'],
+    queryFn: () => getWorkoutDayPlans(),
     enabled: isCreateModalOpen,
   });
 
@@ -113,6 +121,7 @@ export function WorkoutScreen() {
       setCreateStep(1);
       setCreateNote('');
       setPlannedExercises([]);
+      setSelectedPlanId(null);
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'Failed to create workout';
@@ -200,9 +209,33 @@ export function WorkoutScreen() {
     setCreateNote('');
     setCreateStep(1);
     setPlannedExercises([]);
+    setSelectedPlanId(null);
     setExerciseSearch('');
     setIsCreateTypeOpen(false);
+    setIsPlanSelectorOpen(false);
     setIsCreateModalOpen(true);
+  };
+
+  const applyPlan = (plan: WorkoutDayPlan) => {
+    setSelectedPlanId(plan.plan_id);
+    setIsPlanSelectorOpen(false);
+    if (plan.type) {
+      setCreateType(plan.type);
+      setSessionType(plan.type);
+    }
+
+    const plannedFromTemplate = (plan.exercises || [])
+      .map((item, index) => ({
+        exercise_id: item.exercise_id,
+        name: item.exercise?.name || `Exercise ${item.exercise_id}`,
+        planned_sets: Math.max(1, Number(item.planned_sets || 1)),
+        planned_reps: Math.max(1, Number(item.planned_reps || 1)),
+        sort_order: item.sort_order ?? index,
+      }))
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map(({ sort_order: _sort, ...exercise }) => exercise);
+
+    setPlannedExercises(plannedFromTemplate);
   };
 
   const addPlannedExercise = (exercise: ExerciseOption) => {
@@ -258,6 +291,11 @@ export function WorkoutScreen() {
         items: items.sort((a, b) => a.name.localeCompare(b.name)),
       }));
   }, [exerciseOptions, exerciseSearch]);
+
+  const selectedPlan = useMemo(() => {
+    if (!selectedPlanId) return null;
+    return (plansQuery.data || []).find((plan) => plan.plan_id === selectedPlanId) ?? null;
+  }, [plansQuery.data, selectedPlanId]);
 
   const confirmDeleteSession = (sessionId: number) => {
     Alert.alert('Delete Session', 'This will permanently delete this workout session.', [
@@ -378,13 +416,18 @@ export function WorkoutScreen() {
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Quick Create</Text>
-        <Text style={styles.mutedInline}>Create a session in steps (details and planned exercises).</Text>
-        <PrimaryButton
-          label="OPEN CREATE FLOW"
-          onPress={openCreateModal}
-          variant="hero"
-        />
+        <Text style={styles.panelTitle}>Session Actions</Text>
+        <Text style={styles.mutedInline}>Create a workout or manage your planned day templates.</Text>
+        <View style={styles.actionTiles}>
+          <Pressable style={styles.actionTile} onPress={openCreateModal}>
+            <Text style={styles.actionTileTitle}>Create Workout Session</Text>
+            <Text style={styles.actionTileSub}>Open guided setup</Text>
+          </Pressable>
+          <Pressable style={styles.actionTile} onPress={() => navigation.navigate('PlanDayManager')}>
+            <Text style={styles.actionTileTitle}>Planned Day Menu</Text>
+            <Text style={styles.actionTileSub}>View and edit templates</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.panel}>
@@ -467,6 +510,42 @@ export function WorkoutScreen() {
                   </View>
                 ) : null}
 
+                <Text style={styles.selectLabel}>Planned Day Template</Text>
+                <Pressable
+                  onPress={() => setIsPlanSelectorOpen((prev) => !prev)}
+                  style={styles.selectBox}
+                >
+                  <Text style={styles.selectValue}>{selectedPlan?.name || 'None (Manual)'}</Text>
+                  <Text style={styles.selectChevron}>{isPlanSelectorOpen ? '▲' : '▼'}</Text>
+                </Pressable>
+                {isPlanSelectorOpen ? (
+                  <View style={styles.selectMenu}>
+                    <Pressable
+                      onPress={() => {
+                        setSelectedPlanId(null);
+                        setPlannedExercises([]);
+                        setIsPlanSelectorOpen(false);
+                      }}
+                      style={[styles.selectOption, selectedPlanId === null && styles.selectOptionActive]}
+                    >
+                      <Text style={[styles.selectOptionText, selectedPlanId === null && styles.selectOptionTextActive]}>None (Manual)</Text>
+                    </Pressable>
+                    {(plansQuery.data || []).map((plan) => {
+                      const isActive = selectedPlanId === plan.plan_id;
+                      return (
+                        <Pressable
+                          key={plan.plan_id}
+                          onPress={() => applyPlan(plan)}
+                          style={[styles.selectOption, isActive && styles.selectOptionActive]}
+                        >
+                          <Text style={[styles.selectOptionText, isActive && styles.selectOptionTextActive]}>{plan.name}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+                {plansQuery.isLoading ? <Text style={styles.mutedInline}>Loading planned days...</Text> : null}
+
                 <Text style={styles.selectLabel}>Note</Text>
                 <TextInput
                   value={createNote}
@@ -478,6 +557,49 @@ export function WorkoutScreen() {
               </View>
             ) : (
               <View style={styles.stepBlock}>
+                <Text style={styles.selectLabel}>Apply Saved Plan (Optional)</Text>
+                {plansQuery.isLoading ? <Text style={styles.mutedInline}>Loading day plans...</Text> : null}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.planChipRow}>
+                  {(plansQuery.data || []).map((plan) => {
+                    const active = selectedPlanId === plan.plan_id;
+                    return (
+                      <Pressable
+                        key={plan.plan_id}
+                        onPress={() => applyPlan(plan)}
+                        style={[styles.planChip, active && styles.planChipActive]}
+                      >
+                        <Text style={[styles.planChipText, active && styles.planChipTextActive]}>{plan.name}</Text>
+                        <Text style={[styles.planChipMeta, active && styles.planChipMetaActive]}>
+                          {plan.exercises?.length || 0} ex
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+
+                {selectedPlan ? (
+                  <View style={styles.selectedPlanCard}>
+                    <View style={styles.selectedPlanHead}>
+                      <Text style={styles.selectedPlanName}>{selectedPlan.name}</Text>
+                      <Pressable onPress={() => navigation.navigate('PlanDayManager', { planId: selectedPlan.plan_id })}>
+                        <Text style={styles.selectedPlanEdit}>Edit Plan</Text>
+                      </Pressable>
+                    </View>
+                    {selectedPlan.notes ? <Text style={styles.selectedPlanNotes}>{selectedPlan.notes}</Text> : null}
+                    {(selectedPlan.exercises || [])
+                      .slice()
+                      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                      .map((item) => (
+                        <View key={item.plan_exercise_id} style={styles.selectedPlanExerciseRow}>
+                          <Text style={styles.selectedPlanExerciseName}>{item.exercise?.name || `Exercise ${item.exercise_id}`}</Text>
+                          <Text style={styles.selectedPlanExerciseMeta}>
+                            {item.planned_sets} x {item.planned_reps}
+                          </Text>
+                        </View>
+                      ))}
+                  </View>
+                ) : null}
+
                 <Text style={styles.selectLabel}>Add Planned Exercises</Text>
                 <TextInput
                   value={exerciseSearch}
@@ -576,8 +698,8 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.38)',
-    backgroundColor: 'rgba(8,10,14,0.95)',
+    borderColor: 'rgba(244,244,245,0.16)',
+    backgroundColor: 'rgba(10,11,14,0.92)',
     padding: 16,
     gap: 8,
   },
@@ -610,7 +732,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(244,244,245,0.12)',
     paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.32)',
+    backgroundColor: 'rgba(10,11,14,0.92)',
     gap: 4,
   },
   metricLabel: {
@@ -951,6 +1073,114 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: '700',
     fontSize: 12,
+  },
+  planChipRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  planChip: {
+    minWidth: 120,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+  },
+  planChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59,130,246,0.18)',
+  },
+  planChipText: {
+    color: colors.textPrimary,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  planChipTextActive: {
+    color: colors.primary,
+  },
+  planChipMeta: {
+    marginTop: 2,
+    color: 'rgba(244,244,245,0.45)',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  planChipMetaActive: {
+    color: colors.primary,
+  },
+  actionTiles: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionTile: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(244,244,245,0.16)',
+    backgroundColor: 'rgba(10,11,14,0.92)',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    gap: 4,
+  },
+  actionTileTitle: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  actionTileSub: {
+    color: 'rgba(244,244,245,0.55)',
+    fontSize: 11,
+  },
+  selectedPlanCard: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.38)',
+    backgroundColor: 'rgba(9,13,20,0.92)',
+    padding: 10,
+    gap: 6,
+  },
+  selectedPlanHead: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedPlanName: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+    flex: 1,
+  },
+  selectedPlanEdit: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  selectedPlanNotes: {
+    color: 'rgba(244,244,245,0.62)',
+    fontSize: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244,244,245,0.1)',
+    paddingBottom: 6,
+  },
+  selectedPlanExerciseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  selectedPlanExerciseName: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    flex: 1,
+  },
+  selectedPlanExerciseMeta: {
+    color: colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
   },
   addedTag: {
     color: colors.green,

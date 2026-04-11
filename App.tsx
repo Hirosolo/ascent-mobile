@@ -1,4 +1,3 @@
-import 'react-native-gesture-handler';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
@@ -18,6 +17,7 @@ import { SummaryScreen } from '@/screens/app/SummaryScreen';
 import { ProgramsScreen } from '@/screens/app/ProgramsScreen';
 import { ProfileScreen } from '@/screens/app/ProfileScreen';
 import { WorkoutDetailScreen } from '@/screens/app/WorkoutDetailScreen';
+import { PlanDayManagerScreen } from '@/screens/app/PlanDayManagerScreen';
 
 type AuthStackParamList = {
   SignIn: undefined;
@@ -37,6 +37,7 @@ type AppTabParamList = {
 type RootStackParamList = {
   HomeTabs: undefined;
   WorkoutDetail: { sessionId: number };
+  PlanDayManager: { planId?: number } | undefined;
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -129,6 +130,16 @@ function AppNavigator() {
         name="WorkoutDetail"
         options={{
           title: 'Workout Detail',
+          headerStyle: { backgroundColor: colors.surfaceDark },
+          headerTitleStyle: { color: colors.textPrimary, fontWeight: '700' },
+          headerTintColor: colors.textPrimary,
+        }}
+      />
+      <RootStack.Screen
+        component={PlanDayManagerScreen}
+        name="PlanDayManager"
+        options={{
+          title: 'Plan Day Manager',
           headerStyle: { backgroundColor: colors.surfaceDark },
           headerTitleStyle: { color: colors.textPrimary, fontWeight: '700' },
           headerTintColor: colors.textPrimary,
