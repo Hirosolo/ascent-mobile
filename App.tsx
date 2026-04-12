@@ -14,7 +14,7 @@ import { VerifyEmailScreen } from '@/screens/auth/VerifyEmailScreen';
 import { WorkoutScreen } from '@/screens/app/WorkoutScreen';
 import { NutritionScreen } from '@/screens/app/NutritionScreen';
 import { SummaryScreen } from '@/screens/app/SummaryScreen';
-import { ProgramsScreen } from '@/screens/app/ProgramsScreen';
+import { ProgramsScreen } from './src/screens/app/ProgramsScreen';
 import { ProfileScreen } from '@/screens/app/ProfileScreen';
 import { WorkoutDetailScreen } from '@/screens/app/WorkoutDetailScreen';
 import { PlanDayManagerScreen } from '@/screens/app/PlanDayManagerScreen';
@@ -71,9 +71,7 @@ function HomeTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surfaceDark },
-        headerTitleStyle: { color: colors.textPrimary, fontWeight: '700' },
-        headerTintColor: colors.textPrimary,
+        headerShown: false,
         tabBarStyle: {
           backgroundColor: colors.surfaceDark,
           borderTopColor: colors.surfaceHighlight,
@@ -138,12 +136,7 @@ function AppNavigator() {
       <RootStack.Screen
         component={PlanDayManagerScreen}
         name="PlanDayManager"
-        options={{
-          title: 'Plan Day Manager',
-          headerStyle: { backgroundColor: colors.surfaceDark },
-          headerTitleStyle: { color: colors.textPrimary, fontWeight: '700' },
-          headerTintColor: colors.textPrimary,
-        }}
+        options={{ headerShown: false }}
       />
     </RootStack.Navigator>
   );
