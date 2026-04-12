@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Dimensions, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg';
 import { eachMonthOfInterval, eachYearOfInterval, format, getDaysInMonth } from 'date-fns';
 import { Screen } from '@/components/ui/Screen';
 import { getSummary } from '@/services/summary';
@@ -89,12 +89,12 @@ function MultiLineChart<T extends { dateLabel: string; label: string }>(props: {
       {yTicks.map((tick, idx) => {
         const y = padding.top + (1 - tick / Math.max(1, maxY)) * (props.height - padding.top - padding.bottom);
         return (
-          <View key={`grid-${idx}`}>
+          <G key={`grid-${idx}`}>
             <Line x1={padding.left} y1={y} x2={props.width - padding.right} y2={y} stroke="rgba(255,255,255,0.08)" strokeDasharray="6 6" />
             <SvgText x={6} y={y + 4} fill={colors.textDim} fontSize="9">
               {tick}
             </SvgText>
-          </View>
+          </G>
         );
       })}
 
@@ -182,10 +182,8 @@ export function SummaryScreen() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [calendarStep, setCalendarStep] = useState<CalendarStep>('year');
-
   const [activeTab, setActiveTab] = useState<SummaryTab>('nutrition');
   const [dataset, setDataset] = useState<SummaryPoint[]>([]);
-
   const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -205,7 +203,6 @@ export function SummaryScreen() {
     try {
       const monthParam = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`;
       const payload = await getSummary(monthParam);
-
       const daysInMonth = getDaysInMonth(new Date(selectedYear, selectedMonth, 1));
       const dayMap = new Map((payload.daily_data ?? []).map((day) => [day.date.slice(0, 10), day]));
       const nextDataset: SummaryPoint[] = [];
@@ -276,10 +273,22 @@ export function SummaryScreen() {
   return (
     <Screen scroll contentStyle={styles.screen} refreshing={isRefreshing} onRefresh={handleRefresh}>
       <View style={styles.headerRow}>
+        <Pressable style={styles.headerIconBtn}>
+          <MaterialCommunityIcons color={colors.primary} name="menu" size={20} />
+        </Pressable>
         <View>
-          <Text style={styles.title}>Summary</Text>
-          <Text style={styles.subtitle}>Monthly performance snapshot.</Text>
+          <Text style={styles.title}>SUMMARY</Text>
+          <Text style={styles.subtitle}>Monthly performance snapshot</Text>
         </View>
+        <Pressable style={styles.headerIconBtn}>
+          <MaterialCommunityIcons color={colors.textDim} name="bell-outline" size={20} />
+          <View style={styles.notifyDot} />
+        </Pressable>
+      </View>
+
+      <View style={styles.sectionHeadRow}>
+        <Text style={styles.sectionLabel}>DAILY MACROS</Text>
+        <Text style={styles.sectionDate}>{format(new Date(), 'EEE, MMM dd').toUpperCase()}</Text>
       </View>
 
       <View style={styles.periodWrap}>
@@ -303,6 +312,10 @@ export function SummaryScreen() {
         <CircularProgress value={totals.avgKcal} max={3500} label="AVG KCAL" icon="fire" strokeColor="#f97316" />
         <CircularProgress value={totals.avgProtein} max={250} label="AVG PROTEIN" unit="g" icon="egg" strokeColor="#a855f7" />
         <CircularProgress value={totals.avgGR} max={100} label="GR SCORE" icon="flash" strokeColor={colors.primary} />
+      </View>
+
+      <View style={styles.sectionHeadRow}>
+        <Text style={styles.sectionLabel}>30-DAY TRENDS</Text>
       </View>
 
       <View style={styles.tabsRow}>
@@ -364,6 +377,16 @@ export function SummaryScreen() {
             </View>
           </>
         )}
+      </View>
+
+      <View style={styles.insightCard}>
+        <View style={styles.insightIconBox}>
+          <MaterialCommunityIcons color={colors.primary} name="flash" size={20} />
+        </View>
+        <View style={styles.insightTextWrap}>
+          <Text style={styles.insightTitle}>Peak Performance Detected</Text>
+          <Text style={styles.insightBody}>Protein intake is consistent. Recovery scores are higher than average this week.</Text>
+        </View>
       </View>
 
       <Modal visible={isCalendarOpen} transparent animationType="fade" onRequestClose={() => setIsCalendarOpen(false)}>
@@ -444,24 +467,62 @@ export function SummaryScreen() {
 const styles = StyleSheet.create({
   screen: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 12,
     paddingBottom: 24,
     gap: 16,
+    backgroundColor: '#050505',
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  headerIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(59,130,246,0.2)',
+    backgroundColor: 'rgba(15,17,21,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notifyDot: {
+    position: 'absolute',
+    top: 7,
+    right: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 6,
+    backgroundColor: colors.primary,
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 0.4,
   },
   subtitle: {
     color: colors.textDim,
     fontSize: 11,
-    marginTop: 3,
+    marginTop: 2,
+  },
+  sectionHeadRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sectionLabel: {
+    color: colors.primary,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  sectionDate: {
+    color: 'rgba(255,255,255,0.42)',
+    fontSize: 10,
+    fontWeight: '600',
   },
   periodWrap: {
     maxWidth: 220,
@@ -469,8 +530,8 @@ const styles = StyleSheet.create({
   periodBtn: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: colors.surfaceCard,
+    borderColor: 'rgba(59,130,246,0.2)',
+    backgroundColor: 'rgba(15,17,21,0.65)',
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
@@ -565,8 +626,8 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   tabBtnInactive: {
-    backgroundColor: colors.surfaceCard,
-    borderColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: 'rgba(15,17,21,0.65)',
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   tabText: {
     fontSize: 14,
@@ -577,36 +638,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   card: {
-    borderRadius: 24,
-    backgroundColor: colors.surfaceCard,
+    borderRadius: 20,
+    backgroundColor: 'rgba(15,17,21,0.65)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(59,130,246,0.15)',
     padding: 14,
     gap: 8,
-  },
-  subTabsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 4,
-  },
-  subTabBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1,
-  },
-  subTabBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  subTabBtnInactive: {
-    backgroundColor: colors.surfaceDark,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  subTabText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
   },
   cardTitle: {
     color: colors.textPrimary,
@@ -626,14 +663,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
     overflow: 'hidden',
     marginTop: 6,
-    backgroundColor: '#0b1220',
-  },
-  chartWrapSmall: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    overflow: 'hidden',
-    marginTop: 8,
     backgroundColor: '#0b1220',
   },
   legendRow: {
@@ -656,80 +685,44 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     fontSize: 10,
   },
-  selectLabel: {
-    color: colors.textDim,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 1.4,
-  },
-  exerciseList: {
-    paddingVertical: 6,
-    gap: 8,
-  },
-  exerciseChip: {
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  insightCard: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: colors.surfaceDark,
-  },
-  exerciseChipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  exerciseChipText: {
-    color: colors.textDim,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  exerciseChipTextActive: {
-    color: '#ffffff',
-  },
-  miniStatsGrid: {
+    borderColor: 'rgba(59,130,246,0.2)',
+    backgroundColor: 'rgba(15,17,21,0.65)',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    borderRadius: 14,
+    padding: 12,
     flexDirection: 'row',
     gap: 10,
-    marginTop: 8,
-    marginBottom: 8,
+    alignItems: 'flex-start',
   },
-  miniStatCard: {
+  insightIconBox: {
+    backgroundColor: 'rgba(59,130,246,0.18)',
+    borderRadius: 10,
+    padding: 8,
+  },
+  insightTextWrap: {
     flex: 1,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: colors.surfaceDark,
+    gap: 2,
   },
-  miniStatLabel: {
-    color: colors.textDim,
-    fontSize: 9,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  miniStatValue: {
+  insightTitle: {
     color: colors.textPrimary,
-    fontSize: 23,
+    fontSize: 14,
     fontWeight: '800',
-    marginTop: 8,
   },
-  workoutPlaceholder: {
-    borderRadius: 16,
-    backgroundColor: colors.surfaceDark,
-    minHeight: 180,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  emptyText: {
-    color: colors.textDim,
-    fontSize: 13,
+  insightBody: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    lineHeight: 17,
   },
   loadingOverlay: {
     paddingVertical: 4,
     alignItems: 'center',
+  },
+  emptyText: {
+    color: colors.textDim,
+    fontSize: 13,
   },
   modalOverlay: {
     flex: 1,

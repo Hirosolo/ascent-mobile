@@ -53,6 +53,15 @@ const MEAL_GROUP_ORDER: MealGroupName[] = ['Breakfast', 'Lunch', 'Dinner', 'Snac
 const STEP_TITLES = ['Initialization', 'Database Search', 'Performance Ratio', 'Final Review'] as const;
 const STEP_MEAL_OPTIONS = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Pre-Workout', 'Post-Workout'];
 
+const MEAL_GROUP_COLORS: Record<MealGroupName, string> = {
+  Breakfast: '#3b82f6',
+  Lunch: '#a855f7',
+  Dinner: '#6366f1',
+  Snacks: '#f59e0b',
+  Supplements: '#10b981',
+  Other: '#64748b',
+};
+
 const MACRO_COLORS = {
   protein: '#3b82f6',
   carbs: '#ef4444',
@@ -427,8 +436,12 @@ export function NutritionScreen() {
     <Screen scroll refreshing={isRefreshing} onRefresh={handleRefresh} contentStyle={styles.screen}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={styles.title}>NUTRITION TERMINAL</Text>
+          <Text style={styles.systemStatus}>Terminal Status: Online</Text>
+          <Text style={styles.title}>ASCENT MNT-01</Text>
           <Text style={styles.dateText}>{format(selectedDate, 'MMM dd, yyyy')}</Text>
+        </View>
+        <View style={styles.avatarCircle}>
+          <MaterialCommunityIcons color={colors.primary} name="account-circle" size={22} />
         </View>
       </View>
 
@@ -582,6 +595,7 @@ export function NutritionScreen() {
 
       {groupedMeals.map(({ group, items }) => {
         if (items.length === 0) return null;
+        const groupColor = MEAL_GROUP_COLORS[group];
         return (
           <View key={group} style={styles.groupWrap}>
             <View style={styles.groupHeader}>
@@ -590,22 +604,31 @@ export function NutritionScreen() {
             </View>
 
             {items.map((meal, idx) => (
-              <Pressable key={meal.meal_id} style={[styles.mealCard, idx > 0 && styles.mealCardGap]} onPress={() => void openMealDetail(meal)}>
-                <View style={styles.mealTop}>
-                  <View>
+              <Pressable key={meal.meal_id} style={[styles.mealCard, idx > 0 && styles.mealCardGap, { borderLeftColor: groupColor }]} onPress={() => void openMealDetail(meal)}>
+                <View style={styles.mealRow}>
+                  <View style={[styles.mealIconBox, { backgroundColor: `${groupColor}22` }]}>
+                    <MaterialCommunityIcons color={groupColor} name={mealTypeIcon(meal.mealType)} size={20} />
+                  </View>
+                  <View style={styles.mealContent}>
+                    <View style={styles.mealTop}>
+                      <Text style={styles.mealName} numberOfLines={1}>{meal.name}</Text>
+                      <View style={styles.kcalBadge}>
+                        <Text style={styles.kcalBadgeText}>{Math.round(meal.calories)} KCAL</Text>
+                      </View>
+                    </View>
                     <Text style={styles.mealMeta}>{meal.time}</Text>
-                    <Text style={styles.mealName}>{meal.name}</Text>
+                    <View style={styles.macroPills}>
+                      <View style={[styles.macroPill, styles.pillProtein]}>
+                        <Text style={styles.macroPillText}>P {Math.round(meal.protein)}g</Text>
+                      </View>
+                      <View style={[styles.macroPill, styles.pillCarbs]}>
+                        <Text style={styles.macroPillText}>C {Math.round(meal.carbs)}g</Text>
+                      </View>
+                      <View style={[styles.macroPill, styles.pillFats]}>
+                        <Text style={styles.macroPillText}>F {Math.round(meal.fats)}g</Text>
+                      </View>
+                    </View>
                   </View>
-                  <View style={styles.kcalBadge}>
-                    <Text style={styles.kcalBadgeText}>{Math.round(meal.calories)} KCAL</Text>
-                  </View>
-                </View>
-
-                <View style={styles.macroRow}>
-                  <MiniMetric label="Protein" value={`${Math.round(meal.protein)}g`} />
-                  <MiniMetric label="Carbs" value={`${Math.round(meal.carbs)}g`} />
-                  <MiniMetric label="Fats" value={`${Math.round(meal.fats)}g`} />
-                  <MiniMetric label="Fiber" value={`${Math.round(meal.fiber)}g`} />
                 </View>
               </Pressable>
             ))}
@@ -944,15 +967,33 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
+  systemStatus: {
+    color: colors.primary,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1.8,
+    fontWeight: '800',
+    marginBottom: 3,
+  },
   dateText: {
     color: 'rgba(255,255,255,0.45)',
-    fontSize: 12,
+    fontSize: 11,
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(17,17,17,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dateStrip: {
     gap: 8,
@@ -1206,16 +1247,34 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+    borderLeftWidth: 4,
     backgroundColor: '#121212',
-    gap: 10,
   },
   mealCardGap: {
     marginTop: 8,
+  },
+  mealRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  mealIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  mealContent: {
+    flex: 1,
+    gap: 4,
   },
   mealTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 6,
   },
   mealMeta: {
     color: colors.textDim,
@@ -1226,10 +1285,39 @@ const styles = StyleSheet.create({
   },
   mealName: {
     color: colors.textPrimary,
-    fontSize: 20,
+    fontSize: 14,
     fontWeight: '900',
     textTransform: 'uppercase',
-    marginTop: 3,
+    flex: 1,
+  },
+  macroPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
+  },
+  macroPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  pillProtein: {
+    borderColor: 'rgba(168,85,247,0.35)',
+    backgroundColor: 'rgba(168,85,247,0.12)',
+  },
+  pillCarbs: {
+    borderColor: 'rgba(59,130,246,0.35)',
+    backgroundColor: 'rgba(59,130,246,0.12)',
+  },
+  pillFats: {
+    borderColor: 'rgba(236,72,153,0.35)',
+    backgroundColor: 'rgba(236,72,153,0.12)',
+  },
+  macroPillText: {
+    color: colors.textPrimary,
+    fontSize: 9,
+    fontWeight: '800',
   },
   kcalBadge: {
     paddingHorizontal: 9,

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
 import {
@@ -25,6 +26,7 @@ const DEFAULT_TYPES = ['Push', 'Pull', 'Legs', 'Cardio', 'Full Body', 'Strength'
 
 export function PlanDayManagerScreen() {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<'list' | 'edit'>('list');
   const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
@@ -185,90 +187,124 @@ export function PlanDayManagerScreen() {
   if (mode === 'list') {
     return (
       <Screen scroll contentStyle={styles.screen}>
-        <View style={styles.heroCard}>
-          <Text style={styles.kicker}>Plan Day</Text>
-          <Text style={styles.title}>WORKOUT TEMPLATES</Text>
-          <Text style={styles.subtitle}>Reuse your preferred exercise templates quickly.</Text>
+        <View style={styles.headerRow}>
+          <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <MaterialCommunityIcons color={colors.textDim} name="arrow-left" size={24} />
+          </Pressable>
+          <View style={styles.headerText}>
+            <Text style={styles.headerKicker}>Protocol Library</Text>
+            <Text style={styles.headerTitle}>PLAN DAY</Text>
+          </View>
+          <View style={styles.headerSpacer} />
         </View>
 
-        <View style={styles.panel}>
-          <PrimaryButton label="CREATE PLAN DAY" onPress={startCreate} variant="hero" />
+        <Pressable style={styles.createBtn} onPress={startCreate}>
+          <MaterialCommunityIcons color="#ffffff" name="plus-circle" size={20} />
+          <Text style={styles.createBtnText}>NEW TEMPLATE</Text>
+        </Pressable>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Template Library</Text>
+          <Text style={styles.sectionMeta}>{plansQuery.data?.length ?? 0} saved</Text>
         </View>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Saved Plans</Text>
-          {plansQuery.isLoading ? <Text style={styles.muted}>Loading plans...</Text> : null}
-          {plansQuery.isError ? <Text style={styles.muted}>Unable to load plans.</Text> : null}
-          {!plansQuery.isLoading && (plansQuery.data?.length ?? 0) === 0 ? (
-            <Text style={styles.muted}>No plan day templates yet.</Text>
-          ) : null}
+        {plansQuery.isLoading ? <Text style={styles.muted}>Loading plans...</Text> : null}
+        {plansQuery.isError ? <Text style={styles.muted}>Unable to load plans.</Text> : null}
+        {!plansQuery.isLoading && (plansQuery.data?.length ?? 0) === 0 ? (
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons color="rgba(255,255,255,0.12)" name="folder-open-outline" size={48} />
+            <Text style={styles.emptyTitle}>No Templates Yet</Text>
+            <Text style={styles.emptySubtitle}>Create your first workout template</Text>
+          </View>
+        ) : null}
 
-          {(plansQuery.data || []).map((plan) => {
-            const isExpanded = expandedPlanId === plan.plan_id;
+        {(plansQuery.data || []).map((plan) => {
+          const isExpanded = expandedPlanId === plan.plan_id;
 
-            return (
-              <View key={plan.plan_id} style={styles.planBlock}>
-                <Pressable style={styles.planRow} onPress={() => setExpandedPlanId(isExpanded ? null : plan.plan_id)}>
-                  <View style={styles.planInfo}>
-                    <Text style={styles.planName}>{plan.name}</Text>
-                    <Text style={styles.planMeta}>
-                      {plan.type || 'General'} • {plan.exercises?.length || 0} exercises
-                    </Text>
-                  </View>
-                  <View style={styles.planActions}>
-                    <Text style={styles.openDetailText}>{isExpanded ? 'Hide' : 'View'}</Text>
-                    <Pressable onPress={() => startEdit(plan)}>
-                      <Text style={styles.editText}>Edit</Text>
-                    </Pressable>
-                    <Pressable onPress={() => askDelete(plan.plan_id)}>
-                      <Text style={styles.deleteText}>Delete</Text>
-                    </Pressable>
-                  </View>
-                </Pressable>
+          return (
+            <View key={plan.plan_id} style={styles.planCard}>
+              <Pressable style={styles.planCardHead} onPress={() => setExpandedPlanId(isExpanded ? null : plan.plan_id)}>
+                <View style={styles.planIconBox}>
+                  <MaterialCommunityIcons color={colors.primary} name="dumbbell" size={20} />
+                </View>
+                <View style={styles.planCardInfo}>
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  <Text style={styles.planMeta}>
+                    {plan.type || 'General'} • {plan.exercises?.length || 0} ex
+                  </Text>
+                </View>
+                <View style={styles.planCardActions}>
+                  <Pressable style={styles.planActionBtn} onPress={() => startEdit(plan)}>
+                    <MaterialCommunityIcons color={colors.primary} name="pencil" size={16} />
+                  </Pressable>
+                  <Pressable style={[styles.planActionBtn, styles.planDeleteBtn]} onPress={() => askDelete(plan.plan_id)}>
+                    <MaterialCommunityIcons color="#ef4444" name="trash-can-outline" size={16} />
+                  </Pressable>
+                </View>
+              </Pressable>
 
-                {isExpanded ? (
-                  <View style={styles.planDetailCard}>
-                    {plan.notes ? <Text style={styles.planDetailNotes}>{plan.notes}</Text> : null}
+              {isExpanded ? (
+                <View style={styles.planExpandedContent}>
+                  {plan.notes ? <Text style={styles.planDetailNotes}>{plan.notes}</Text> : null}
+                  <View style={styles.exerciseList}>
                     {(plan.exercises || [])
                       .slice()
                       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-                      .map((item) => (
-                        <View key={item.plan_exercise_id} style={styles.detailRow}>
-                          <Text style={styles.detailExerciseName}>{item.exercise?.name || `Exercise ${item.exercise_id}`}</Text>
-                          <Text style={styles.detailExerciseMeta}>
-                            {item.planned_sets} x {item.planned_reps}
-                          </Text>
+                      .map((item, idx) => (
+                        <View key={item.plan_exercise_id} style={[styles.templateExerciseRow, idx > 0 && { marginTop: 6 }]}>
+                          <Text style={styles.exerciseIndex}>{idx + 1}</Text>
+                          <View style={styles.exerciseRowContent}>
+                            <Text style={styles.templateExerciseName}>{item.exercise?.name || `Exercise ${item.exercise_id}`}</Text>
+                            <Text style={styles.templateExerciseMeta}>
+                              {item.planned_sets}×{item.planned_reps} reps
+                            </Text>
+                          </View>
                         </View>
                       ))}
                   </View>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
       </Screen>
     );
   }
 
   return (
     <Screen scroll contentStyle={styles.screen}>
-      <View style={styles.heroCard}>
-        <Text style={styles.kicker}>{editingPlanId ? 'Edit Plan' : 'Create Plan'}</Text>
-        <Text style={styles.title}>{editingPlanId ? 'UPDATE TEMPLATE' : 'NEW TEMPLATE'}</Text>
+      <View style={styles.headerRow}>
+        <Pressable style={styles.backBtn} onPress={() => setMode('list')}>
+          <MaterialCommunityIcons color={colors.textDim} name="arrow-left" size={24} />
+        </Pressable>
+        <View style={styles.headerText}>
+          <Text style={styles.headerKicker}>{editingPlanId ? 'Edit' : 'Create'} Template</Text>
+          <Text style={styles.headerTitle}>{editingPlanId ? 'UPDATE PROTOCOL' : 'NEW PROTOCOL'}</Text>
+        </View>
+        <Pressable style={styles.closeHeaderBtn} onPress={() => setMode('list')}>
+          <MaterialCommunityIcons color={colors.textDim} name="close" size={24} />
+        </Pressable>
       </View>
 
-      <View style={styles.panel}>
-        <Text style={styles.selectLabel}>Plan Name</Text>
+      <View style={styles.stepIndicator}>
+        <View style={styles.stepDot} />
+        <Text style={styles.stepLabel}>Building your template...</Text>
+      </View>
+
+      <View style={styles.formCard}>
+        <Text style={styles.formLabel}>TEMPLATE NAME</Text>
         <TextInput
+          style={styles.formInput}
           value={name}
           onChangeText={setName}
-          placeholder="Push Day Alpha"
-          placeholderTextColor="rgba(244,244,245,0.35)"
-          style={styles.input}
+          placeholder="e.g., Upper Body Strength"
+          placeholderTextColor={colors.textDim}
         />
+      </View>
 
-        <Text style={styles.selectLabel}>Type</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeRow}>
+      <View style={styles.formCard}>
+        <Text style={styles.formLabel}>PROGRAM TYPE</Text>
+        <View style={styles.typeChips}>
           {DEFAULT_TYPES.map((option) => {
             const active = option === type;
             return (
@@ -277,73 +313,108 @@ export function PlanDayManagerScreen() {
               </Pressable>
             );
           })}
-        </ScrollView>
+        </View>
+      </View>
 
-        <Text style={styles.selectLabel}>Notes</Text>
+      <View style={styles.formCard}>
+        <Text style={styles.formLabel}>NOTES</Text>
         <TextInput
+          style={[styles.formInput, styles.notesInput]}
           value={notes}
           onChangeText={setNotes}
-          placeholder="Optional notes"
-          placeholderTextColor="rgba(244,244,245,0.35)"
-          style={styles.input}
+          placeholder="Add workout notes or tips..."
+          placeholderTextColor={colors.textDim}
+          multiline
+          numberOfLines={3}
         />
       </View>
 
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Add Exercises</Text>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Add Exercises</Text>
+      </View>
+      <View style={styles.exerciseSearchCard}>
+        <MaterialCommunityIcons color={colors.textDim} name="magnify" size={20} />
         <TextInput
+          style={styles.searchInput}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search exercise"
-          placeholderTextColor="rgba(244,244,245,0.35)"
-          style={styles.input}
+          placeholder="Search exercises..."
+          placeholderTextColor={colors.textDim}
         />
-
-        <ScrollView style={styles.exerciseList} nestedScrollEnabled>
-          {exerciseOptions.map((item) => (
-            <Pressable key={item.exercise_id} onPress={() => addExercise(item)} style={styles.exercisePick}>
-              <Text style={styles.exercisePickText}>{item.name}</Text>
-              <Text style={styles.addSet}>+ Add</Text>
-            </Pressable>
-          ))}
-          {exerciseOptions.length === 0 ? <Text style={styles.mutedInline}>No matching exercises.</Text> : null}
-        </ScrollView>
       </View>
 
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Selected Exercises</Text>
-        {draftExercises.length === 0 ? <Text style={styles.mutedInline}>Add at least one exercise.</Text> : null}
-        {draftExercises.map((item) => (
-          <View key={item.exercise_id} style={styles.plannedRow}>
-            <Text style={styles.plannedName}>{item.name}</Text>
-            <TextInput
-              style={styles.planInput}
-              keyboardType="numeric"
-              value={String(item.planned_sets)}
-              onChangeText={(v) => patchExercise(item.exercise_id, { planned_sets: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
-            />
-            <Text style={styles.inputLabel}>sets</Text>
-            <TextInput
-              style={styles.planInput}
-              keyboardType="numeric"
-              value={String(item.planned_reps)}
-              onChangeText={(v) => patchExercise(item.exercise_id, { planned_reps: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
-            />
-            <Text style={styles.inputLabel}>reps</Text>
-            <Pressable onPress={() => removeExercise(item.exercise_id)}>
-              <Text style={styles.deleteSet}>Del</Text>
+      <ScrollView style={styles.exercisePickList} nestedScrollEnabled>
+        {exerciseOptions.map((item) => (
+          <Pressable key={item.exercise_id} style={styles.exercisePickCard} onPress={() => addExercise(item)}>
+            <View style={styles.exercisePickIconBox}>
+              <MaterialCommunityIcons color={colors.primary} name="dumbbell" size={18} />
+            </View>
+            <View style={styles.exercisePickContent}>
+              <Text style={styles.exercisePickName}>{item.name}</Text>
+              <Text style={styles.exercisePickCategory}>{item.category}</Text>
+            </View>
+            <Pressable style={styles.exerciseAddBtn}>
+              <MaterialCommunityIcons color={colors.primary} name="plus-circle" size={24} />
             </Pressable>
-          </View>
+          </Pressable>
         ))}
-      </View>
+        {exerciseOptions.length === 0 && search.trim() !== '' ? (
+          <Text style={styles.emptyText}>No matching exercises</Text>
+        ) : null}
+      </ScrollView>
 
-      <View style={styles.actionRow}>
-        <PrimaryButton label="BACK" onPress={() => setMode('list')} style={styles.actionButton} />
-        <PrimaryButton
-          label={saveMutation.isPending ? 'SAVING...' : editingPlanId ? 'UPDATE PLAN' : 'SAVE PLAN'}
+      {draftExercises.length > 0 ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Selected Exercises</Text>
+            <Text style={styles.sectionMeta}>{draftExercises.length}</Text>
+          </View>
+          {draftExercises.map((item, idx) => (
+            <View key={item.exercise_id} style={styles.exerciseCard}>
+              <View style={styles.exerciseCardHead}>
+                <Text style={styles.exerciseCardIndex}>{idx + 1}</Text>
+                <View style={styles.exerciseCardContent}>
+                  <Text style={styles.exerciseCardName}>{item.name}</Text>
+                  <Text style={styles.exerciseCardMeta}>{item.planned_sets}×{item.planned_reps}</Text>
+                </View>
+                <Pressable style={styles.removeBtnSmall} onPress={() => removeExercise(item.exercise_id)}>
+                  <MaterialCommunityIcons color={colors.textDim} name="close" size={18} />
+                </Pressable>
+              </View>
+              <View style={styles.exerciseCardInputs}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputGroupLabel}>SETS</Text>
+                  <TextInput
+                    style={styles.setRepsInput}
+                    keyboardType="numeric"
+                    value={String(item.planned_sets)}
+                    onChangeText={(v) => patchExercise(item.exercise_id, { planned_sets: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputGroupLabel}>REPS</Text>
+                  <TextInput
+                    style={styles.setRepsInput}
+                    keyboardType="numeric"
+                    value={String(item.planned_reps)}
+                    onChangeText={(v) => patchExercise(item.exercise_id, { planned_reps: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
+                  />
+                </View>
+              </View>
+            </View>
+          ))}
+        </>
+      ) : null}
+
+      <View style={styles.actionButtons}>
+        <Pressable style={styles.cancelButton} onPress={() => setMode('list')}>
+          <Text style={styles.cancelButtonText}>CANCEL</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
           onPress={() => {
             if (!name.trim()) {
-              Alert.alert('Validation', 'Please provide a plan name.');
+              Alert.alert('Validation', 'Please provide a template name.');
               return;
             }
             if (draftExercises.length === 0) {
@@ -352,10 +423,12 @@ export function PlanDayManagerScreen() {
             }
             saveMutation.mutate();
           }}
-          disabled={!canSave}
-          variant="hero"
-          style={styles.actionButton}
-        />
+          disabled={!canSave || saveMutation.isPending}
+        >
+          <Text style={styles.saveButtonText}>
+            {saveMutation.isPending ? 'SAVING...' : editingPlanId ? 'UPDATE' : 'CREATE'}
+          </Text>
+        </Pressable>
       </View>
     </Screen>
   );
@@ -466,13 +539,6 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 6,
   },
-  planDetailNotes: {
-    color: 'rgba(244,244,245,0.7)',
-    fontSize: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(244,244,245,0.1)',
-    paddingBottom: 6,
-  },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -582,11 +648,427 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  actionRow: {
+  actionButtons: {
     flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  cancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.textDim,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  cancelButtonText: {
+    color: colors.textDim,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  saveButtonDisabled: {
+    backgroundColor: 'rgba(59,130,246,0.3)',
+    opacity: 0.5,
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  // Form styling
+  formCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(15, 17, 21, 0.65)',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 10,
+    borderRadius: 6,
+  },
+  formLabel: {
+    color: colors.textDim,
+    fontSize: 10,
+    letterSpacing: 2.2,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  formInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    backgroundColor: 'rgba(5, 7, 10, 0.8)',
+    color: colors.textPrimary,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 4,
+    fontSize: 14,
+  },
+  notesInput: {
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+  typeChips: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  // Exercise search
+  exerciseSearchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(15, 17, 21, 0.65)',
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.textPrimary,
+    paddingVertical: 11,
+    fontSize: 14,
+  },
+  exercisePickList: {
+    maxHeight: 240,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 244, 245, 0.12)',
+    borderRadius: 6,
+  },
+  exercisePickCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244, 244, 245, 0.08)',
     gap: 10,
   },
-  actionButton: {
+  exercisePickIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 4,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exercisePickContent: {
     flex: 1,
   },
+  exercisePickName: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  exercisePickCategory: {
+    color: colors.textDim,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  exerciseAddBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Selected exercises
+  exerciseCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(15, 17, 21, 0.65)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  exerciseCardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(59, 130, 246, 0.15)',
+    gap: 10,
+  },
+  exerciseCardIndex: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    color: '#ffffff',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  exerciseCardContent: {
+    flex: 1,
+  },
+  exerciseCardName: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  exerciseCardMeta: {
+    color: colors.primary,
+    fontSize: 11,
+    marginTop: 3,
+    fontWeight: '700',
+  },
+  removeBtnSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244, 244, 245, 0.08)',
+  },
+  exerciseCardInputs: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  inputGroup: {
+    flex: 1,
+    gap: 6,
+  },
+  inputGroupLabel: {
+    color: colors.textDim,
+    fontSize: 9,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  setRepsInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    backgroundColor: 'rgba(5, 7, 10, 0.8)',
+    color: colors.textPrimary,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptyText: {
+    color: colors.textDim,
+    textAlign: 'center',
+    paddingVertical: 12,
+    fontSize: 12,
+  },
+  // List mode - header and layout
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  },
+  closeHeaderBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  headerKicker: {
+    color: colors.primary,
+    fontSize: 10,
+    letterSpacing: 2.0,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  headerTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  // Step indicator
+  stepIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  stepLabel: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  // Create button
+  createBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    borderRadius: 6,
+    gap: 8,
+  },
+  createBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
+  },
+  // Section header
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    marginTop: 8,
+  },
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  sectionMeta: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  // Plan cards
+  planCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(15, 17, 21, 0.65)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  planCardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  planIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planCardInfo: {
+    flex: 1,
+  },
+  planCardActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  planActionBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  },
+  planDeleteBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  // Plan expanded detail
+  planExpandedContent: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(59, 130, 246, 0.15)',
+    gap: 8,
+  },
+  planDetailNotes: {
+    color: colors.textDim,
+    fontSize: 12,
+    lineHeight: 18,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244, 244, 245, 0.08)',
+  },
+  templateExerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 6,
+  },
+  exerciseIndex: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    color: '#ffffff',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  exerciseRowContent: {
+    flex: 1,
+  },
+  templateExerciseName: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  templateExerciseMeta: {
+    color: colors.textDim,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 8,
+  },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    color: colors.textDim,
+    fontSize: 12,
+  },
 });
+

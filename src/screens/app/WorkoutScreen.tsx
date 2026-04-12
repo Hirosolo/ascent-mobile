@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { addMonths, endOfMonth, format, startOfMonth, subDays, addDays } from 'date-fns';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import Svg, { Path } from 'react-native-svg';
-import { PrimaryButton } from '@/components/ui/PrimaryButton';
+import Svg, { Circle } from 'react-native-svg';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Screen } from '@/components/ui/Screen';
 import { getSummary } from '@/services/summary';
 import { addExercisesToWorkout, createWorkout, deleteWorkout, getExercises, getWorkoutDayPlans, getWorkouts } from '@/services/workouts';
@@ -33,21 +33,6 @@ type ExerciseOption = {
   name: string;
   category?: string;
 };
-
-function polarToCartesian(cx: number, cy: number, radius: number, angleInDegrees: number) {
-  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
-  return {
-    x: cx + radius * Math.cos(angleInRadians),
-    y: cy + radius * Math.sin(angleInRadians),
-  };
-}
-
-function describeSlice(cx: number, cy: number, radius: number, startAngle: number, endAngle: number) {
-  const start = polarToCartesian(cx, cy, radius, endAngle);
-  const end = polarToCartesian(cx, cy, radius, startAngle);
-  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-  return `M ${cx} ${cy} L ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y} Z`;
-}
 
 export function WorkoutScreen() {
   const navigation = useNavigation<any>();
@@ -144,7 +129,7 @@ export function WorkoutScreen() {
     const start = startOfMonth(currentMonth);
     const end = endOfMonth(currentMonth);
     const dayCount = end.getDate();
-    const firstWeekday = (start.getDay() + 6) % 7; // Mon=0
+    const firstWeekday = start.getDay();
 
     const cells: CalendarCell[] = [];
 
@@ -187,7 +172,19 @@ export function WorkoutScreen() {
 
   const selectedSessions = sessionsByDate.get(selectedDate) ?? [];
 
-  const muscleSplit = summaryQuery.data?.muscle_split ?? [];
+  const muscleSplit = useMemo(() => {
+    return [...(summaryQuery.data?.muscle_split ?? [])].sort((a, b) => b.value - a.value);
+  }, [summaryQuery.data?.muscle_split]);
+
+  const focusItems = muscleSplit.slice(0, 3);
+  const focusPrimary = focusItems[0];
+  const focusLabel = focusItems.length > 1 ? `${focusItems[0].name}/${focusItems[1].name}` : focusItems[0]?.name ?? 'No data';
+  const monthLabel = format(currentMonth, 'MMMM yyyy');
+  const protocolSessions = selectedSessions;
+  const grScore = summaryQuery.data?.gr_score ?? 0;
+  const grChange = summaryQuery.data?.gr_score_change ?? 0;
+  const selectedDateLabel = format(new Date(selectedDate), 'dd MMM yyyy');
+  const totalWorkouts = summaryQuery.data?.total_workouts ?? 0;
 
   const deleteSessionMutation = useMutation({
     mutationFn: (sessionId: number) => deleteWorkout(sessionId),
@@ -314,86 +311,134 @@ export function WorkoutScreen() {
   };
 
   return (
-    <Screen scroll contentStyle={styles.screen} refreshing={isRefreshing} onRefresh={handleRefresh}>
-      <View style={styles.heroCard}>
-        <Text style={styles.kicker}>Ascent Performance</Text>
-        <Text style={styles.title}>WORKOUT COMMAND</Text>
-        <Text style={styles.subtitle}>{format(currentMonth, 'MMMM yyyy')}</Text>
+    <Screen
+      scroll
+      contentStyle={styles.screen}
+      refreshing={isRefreshing}
+      onRefresh={handleRefresh}
+      overlay={(
+        <Pressable style={styles.fabButton} onPress={openCreateModal}>
+          <MaterialCommunityIcons color="#ffffff" name="plus" size={30} />
+        </Pressable>
+      )}
+    >
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.kicker}>Command Center</Text>
+          <Text style={styles.title}>ASCENT</Text>
+        </View>
+        <Pressable style={styles.profileBtn} onPress={() => navigation.navigate('PlanDayManager')}>
+          <MaterialCommunityIcons color={colors.primary} name="clipboard-text-outline" size={24} />
+        </Pressable>
+      </View>
 
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>GR Score</Text>
-            <Text style={styles.metricValue}>{summaryQuery.data?.gr_score ?? 0}</Text>
+      <View style={styles.metricsRow}>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>GR</Text>
+          <Text style={styles.metricValue}>
+            {grScore}
+          </Text>
+          <View style={styles.metricTrendRow}>
+            <MaterialCommunityIcons color={grChange >= 0 ? '#34d399' : '#f87171'} name={grChange >= 0 ? 'trending-up' : 'trending-down'} size={14} />
+            <Text style={[styles.metricTrendText, grChange < 0 && styles.metricTrendTextDown]}>
+              {grChange >= 0 ? '+' : ''}{grChange} GR vs last month
+            </Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Streak</Text>
-            <Text style={styles.metricValue}>{summaryQuery.data?.longest_streak ?? 0}</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricLabel}>Workouts</Text>
-            <Text style={styles.metricValue}>{summaryQuery.data?.total_workouts ?? 0}</Text>
+        </View>
+
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Workouts</Text>
+          <Text style={styles.metricValue}>
+            {totalWorkouts}
+            <Text style={styles.metricUnit}> this month</Text>
+          </Text>
+          <View style={styles.metricTrendRow}>
+            <MaterialCommunityIcons color={colors.primary} name="fire" size={14} />
+            <Text style={styles.metricTrendText}>Best streak {summaryQuery.data?.longest_streak ?? 0} days</Text>
           </View>
         </View>
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Muscle Split</Text>
-        {muscleSplit.length === 0 ? (
+        <View style={styles.panelHeaderRow}>
+          <View>
+            <Text style={styles.sectionHeading}>Muscle Focus</Text>
+          </View>
+          <View style={styles.panelBadge}>
+            <Text style={styles.panelBadgeText}>{monthLabel}</Text>
+          </View>
+        </View>
+
+        {focusItems.length === 0 ? (
           <Text style={styles.muted}>No completed sessions for this month yet.</Text>
         ) : (
-          <>
-            <View style={styles.pieWrap}>
-              <Svg width={160} height={160} viewBox="0 0 160 160">
-                {(() => {
-                  const radius = 64;
-                  const total = muscleSplit.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
-                  let startAngle = 0;
+          <View style={styles.focusRow}>
+            <View style={styles.focusChartWrap}>
+              <Svg height={160} viewBox="0 0 160 160" width={160}>
+                <Circle cx="80" cy="80" fill="transparent" r="46" stroke="rgba(255,255,255,0.06)" strokeWidth="12" />
+                {focusItems.map((item, idx) => {
+                  const radius = 46 - idx * 8;
+                  const circumference = 2 * Math.PI * radius;
+                  const progress = Math.max(0, Math.min(100, item.value));
+                  const offset = circumference * (1 - progress / 100);
 
-                  return muscleSplit.map((item, idx) => {
-                    const ratio = Math.max(0, item.value) / total;
-                    const sweep = Math.max(1, ratio * 360);
-                    const endAngle = startAngle + sweep;
-                    const slice = (
-                      <Path
-                        key={item.name}
-                        d={describeSlice(80, 80, radius, startAngle, endAngle)}
-                        fill={PIE_COLORS[idx % PIE_COLORS.length]}
-                      />
-                    );
-                    startAngle = endAngle;
-                    return slice;
-                  });
-                })()}
+                  return (
+                    <Circle
+                      key={item.name}
+                      cx="80"
+                      cy="80"
+                      fill="transparent"
+                      r={radius}
+                      rotation="-90"
+                      origin="80, 80"
+                      stroke={PIE_COLORS[idx % PIE_COLORS.length]}
+                      strokeDasharray={`${circumference} ${circumference}`}
+                      strokeDashoffset={offset}
+                      strokeLinecap="round"
+                      strokeWidth="8"
+                    />
+                  );
+                })}
               </Svg>
-            </View>
-            {muscleSplit.map((item, idx) => (
-              <View key={item.name} style={styles.splitRow}>
-                <View style={[styles.legendDot, { backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }]} />
-                <Text style={styles.splitLabel}>{item.name}</Text>
-                <Text style={styles.splitValue}>{Math.round(item.value)}%</Text>
+
+              <View style={styles.focusCenterLabel}>
+                <Text style={styles.focusPercent}>{Math.round(focusPrimary?.value ?? 0)}%</Text>
+                <Text style={styles.focusCaption}>{focusLabel}</Text>
               </View>
-            ))}
-          </>
+            </View>
+
+            <View style={styles.focusLegend}>
+              {focusItems.map((item, idx) => (
+                <View key={item.name} style={styles.focusLegendRow}>
+                  <View style={[styles.legendDotLarge, { backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }]} />
+                  <View style={styles.focusLegendTextWrap}>
+                    <Text style={styles.focusLegendTitle}>{item.name}</Text>
+                    <Text style={styles.focusLegendSub}>{Math.round(item.value)}% split</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
         )}
       </View>
 
       <View style={styles.panel}>
-        <View style={styles.calendarHeader}>
-          <Text style={styles.panelTitle}>Calendar</Text>
+        <View style={styles.panelHeaderRow}>
+          <Text style={styles.sectionHeading}>Activity Grid</Text>
           <View style={styles.monthNav}>
             <Pressable onPress={() => setCurrentMonth((prev) => addMonths(prev, -1))}>
-              <Text style={styles.monthNavText}>Prev</Text>
+              <MaterialCommunityIcons color="rgba(244,244,245,0.55)" name="chevron-left" size={18} />
             </Pressable>
-            <Text style={styles.monthLabel}>{format(currentMonth, 'MMMM yyyy')}</Text>
+            <Text style={styles.monthLabel}>{format(currentMonth, 'MMMM')}</Text>
             <Pressable onPress={() => setCurrentMonth((prev) => addMonths(prev, 1))}>
-              <Text style={styles.monthNavText}>Next</Text>
+              <MaterialCommunityIcons color="rgba(244,244,245,0.55)" name="chevron-right" size={18} />
             </Pressable>
           </View>
         </View>
 
         <View style={styles.weekRow}>
-          {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((d) => (
-            <Text key={d} style={styles.weekCell}>{d}</Text>
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, index) => (
+            <Text key={`${d}-${index}`} style={styles.weekCell}>{d}</Text>
           ))}
         </View>
 
@@ -401,11 +446,17 @@ export function WorkoutScreen() {
           {calendarCells.map((cell) => {
             const isSelected = selectedDate === cell.date;
             const isToday = cell.date === todayKey;
+            const hasSession = (sessionsByDate.get(cell.date) ?? []).length > 0;
             return (
               <Pressable
                 key={cell.key}
                 onPress={() => setSelectedDate(cell.date)}
-                style={[styles.dayCell, isSelected && styles.daySelected]}
+                style={[
+                  styles.dayCell,
+                  !cell.currentMonth && styles.dayCellOutside,
+                  isSelected && styles.daySelected,
+                  hasSession && !isSelected && styles.dayHasSession,
+                ]}
               >
                 <Text style={[styles.dayText, !cell.currentMonth && styles.dayOut, isSelected && styles.dayTextSelected]}>{cell.day}</Text>
                 {isToday ? <View style={styles.dot} /> : null}
@@ -413,273 +464,284 @@ export function WorkoutScreen() {
             );
           })}
         </View>
+        <Text style={styles.selectedDayHint}>Selected: {selectedDateLabel}</Text>
       </View>
 
       <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Session Actions</Text>
-        <Text style={styles.mutedInline}>Create a workout or manage your planned day templates.</Text>
-        <View style={styles.actionTiles}>
-          <Pressable style={styles.actionTile} onPress={openCreateModal}>
-            <Text style={styles.actionTileTitle}>Create Workout Session</Text>
-            <Text style={styles.actionTileSub}>Open guided setup</Text>
-          </Pressable>
-          <Pressable style={styles.actionTile} onPress={() => navigation.navigate('PlanDayManager')}>
-            <Text style={styles.actionTileTitle}>Planned Day Menu</Text>
-            <Text style={styles.actionTileSub}>View and edit templates</Text>
+        <View style={styles.panelHeaderRow}>
+          <Text style={styles.sectionHeading}>Workout Sessions</Text>
+          <Pressable style={styles.panelBadge} onPress={() => navigation.navigate('PlanDayManager')}>
+            <Text style={styles.panelBadgeText}>{selectedDateLabel}</Text>
           </Pressable>
         </View>
-      </View>
 
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>Sessions On {format(new Date(selectedDate), 'dd MMM yyyy')}</Text>
-        <FlatList
-          data={selectedSessions}
-          keyExtractor={(item) => String(item.session_id)}
-          scrollEnabled={false}
-          ListEmptyComponent={<Text style={styles.muted}>No sessions on selected day.</Text>}
-          renderItem={({ item }) => (
+        {protocolSessions.length === 0 ? <Text style={styles.muted}>No workout sessions on the selected day.</Text> : null}
+
+        {protocolSessions.map((item, index) => {
+          const iconTone = item.status === 'COMPLETED' ? '#10b981' : index % 2 === 0 ? colors.primary : '#60a5fa';
+          const iconName = item.type?.toLowerCase() === 'cardio' ? 'run' : 'dumbbell';
+          const sessionMeta = item.notes?.trim()
+            ? item.notes.trim()
+            : `${format(new Date(item.scheduled_date), 'MMM d')} • ${item.status}${item.gr_score ? ` • GR ${item.gr_score}` : ''}`;
+
+          return (
             <Pressable
+              key={item.session_id}
               onPress={() => navigation.navigate('WorkoutDetail', { sessionId: item.session_id })}
+              onLongPress={() => confirmDeleteSession(item.session_id)}
               style={styles.sessionRow}
             >
-              <View>
-                <Text style={styles.sessionTitle}>{item.type ?? 'Workout Session'}</Text>
-                <Text style={styles.sessionSub}>{item.notes || 'Open details to log sets and reps'}</Text>
+              <View style={[styles.sessionIconBox, { borderColor: `${iconTone}55`, backgroundColor: `${iconTone}18` }]}>
+                <MaterialCommunityIcons color={iconTone} name={iconName} size={20} />
               </View>
-              <View style={styles.sessionActions}>
+              <View style={styles.sessionContent}>
+                <Text style={styles.sessionTitle}>{item.type ?? 'Workout Session'}</Text>
+                <Text style={styles.sessionSub}>{sessionMeta}</Text>
+              </View>
+              <View style={styles.sessionRight}>
                 <Text style={[styles.badge, item.status === 'COMPLETED' ? styles.done : styles.progress]}>{item.status}</Text>
-                <Pressable onPress={() => confirmDeleteSession(item.session_id)}>
-                  <Text style={styles.deleteSession}>Delete</Text>
-                </Pressable>
+                <MaterialCommunityIcons color="rgba(244,244,245,0.4)" name="chevron-right" size={20} />
               </View>
             </Pressable>
-          )}
-        />
+          );
+        })}
       </View>
 
       <Modal
         transparent
-        animationType="fade"
+        animationType="slide"
         visible={isCreateModalOpen}
         onRequestClose={() => setIsCreateModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Create Workout Session</Text>
-            <Text style={styles.stepIndicator}>Step {createStep} / 2</Text>
+          <View style={styles.modalContainerGlass}>
+            <View style={styles.modalHeader}>
+              <Pressable style={styles.modalBackBtn} onPress={() => setIsCreateModalOpen(false)}>
+                <MaterialCommunityIcons color={colors.textPrimary} name="arrow-left" size={24} />
+              </Pressable>
+              <View style={styles.modalHeaderText}>
+                <Text style={styles.modalHeaderKicker}>Create Session</Text>
+                <Text style={styles.modalHeaderTitle}>NEW WORKOUT</Text>
+              </View>
+              <Pressable style={styles.modalCloseBtn} onPress={() => setIsCreateModalOpen(false)}>
+                <MaterialCommunityIcons color={colors.textDim} name="close" size={24} />
+              </Pressable>
+            </View>
+
+            <View style={styles.stepTrack}>
+              <View style={[styles.stepTrackBar, { width: `${(createStep / 2) * 100}%` }]} />
+            </View>
 
             {createStep === 1 ? (
-              <View style={styles.stepBlock}>
-                <Text style={styles.selectLabel}>Date</Text>
-                <View style={styles.dateRow}>
-                  <Pressable onPress={() => setCreateDate(format(subDays(new Date(createDate), 1), 'yyyy-MM-dd'))}>
-                    <Text style={styles.monthNavText}>Prev Day</Text>
-                  </Pressable>
-                  <Text style={styles.dateValue}>{format(new Date(createDate), 'dd MMM yyyy')}</Text>
-                  <Pressable onPress={() => setCreateDate(format(addDays(new Date(createDate), 1), 'yyyy-MM-dd'))}>
-                    <Text style={styles.monthNavText}>Next Day</Text>
-                  </Pressable>
+              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+                <View style={styles.formCard}>
+                  <Text style={styles.formLabel}>DATE</Text>
+                  <View style={styles.dateNavRow}>
+                    <Pressable style={styles.dateNavBtn} onPress={() => setCreateDate(format(subDays(new Date(createDate), 1), 'yyyy-MM-dd'))}>
+                      <MaterialCommunityIcons color={colors.textDim} name="chevron-left" size={20} />
+                    </Pressable>
+                    <Text style={styles.dateValue}>{format(new Date(createDate), 'dd MMM yyyy')}</Text>
+                    <Pressable style={styles.dateNavBtn} onPress={() => setCreateDate(format(addDays(new Date(createDate), 1), 'yyyy-MM-dd'))}>
+                      <MaterialCommunityIcons color={colors.textDim} name="chevron-right" size={20} />
+                    </Pressable>
+                  </View>
                 </View>
 
-                <Text style={styles.selectLabel}>Session Type</Text>
-                <Pressable
-                  onPress={() => setIsCreateTypeOpen((prev) => !prev)}
-                  style={styles.selectBox}
-                >
-                  <Text style={styles.selectValue}>{createType}</Text>
-                  <Text style={styles.selectChevron}>{isCreateTypeOpen ? '▲' : '▼'}</Text>
-                </Pressable>
-                {isCreateTypeOpen ? (
-                  <View style={styles.selectMenu}>
-                    {SESSION_TYPE_OPTIONS.map((option) => {
-                      const isActive = option === createType;
-                      return (
-                        <Pressable
-                          key={option}
-                          onPress={() => {
-                            setCreateType(option);
-                            setSessionType(option);
-                            setIsCreateTypeOpen(false);
-                          }}
-                          style={[styles.selectOption, isActive && styles.selectOptionActive]}
-                        >
-                          <Text style={[styles.selectOptionText, isActive && styles.selectOptionTextActive]}>{option}</Text>
-                        </Pressable>
-                      );
-                    })}
+                <View style={styles.formCard}>
+                  <Text style={styles.formLabel}>SESSION TYPE</Text>
+                  <View style={styles.typeChipsRow}>
+                    {SESSION_TYPE_OPTIONS.map((option) => (
+                      <Pressable
+                        key={option}
+                        style={[
+                          styles.typeChip,
+                          createType === option && styles.typeChipActive,
+                        ]}
+                        onPress={() => setCreateType(option)}
+                      >
+                        <Text style={[styles.typeChipText, createType === option && styles.typeChipTextActive]}>
+                          {option}
+                        </Text>
+                      </Pressable>
+                    ))}
                   </View>
-                ) : null}
+                </View>
 
-                <Text style={styles.selectLabel}>Planned Day Template</Text>
-                <Pressable
-                  onPress={() => setIsPlanSelectorOpen((prev) => !prev)}
-                  style={styles.selectBox}
-                >
-                  <Text style={styles.selectValue}>{selectedPlan?.name || 'None (Manual)'}</Text>
-                  <Text style={styles.selectChevron}>{isPlanSelectorOpen ? '▲' : '▼'}</Text>
-                </Pressable>
-                {isPlanSelectorOpen ? (
-                  <View style={styles.selectMenu}>
-                    <Pressable
-                      onPress={() => {
-                        setSelectedPlanId(null);
-                        setPlannedExercises([]);
-                        setIsPlanSelectorOpen(false);
-                      }}
-                      style={[styles.selectOption, selectedPlanId === null && styles.selectOptionActive]}
-                    >
-                      <Text style={[styles.selectOptionText, selectedPlanId === null && styles.selectOptionTextActive]}>None (Manual)</Text>
-                    </Pressable>
-                    {(plansQuery.data || []).map((plan) => {
-                      const isActive = selectedPlanId === plan.plan_id;
-                      return (
+                <View style={styles.formCard}>
+                  <Text style={styles.formLabel}>PLANNED DAY TEMPLATE</Text>
+                  <Pressable
+                    onPress={() => setIsPlanSelectorOpen((prev) => !prev)}
+                    style={styles.selectField}
+                  >
+                    <View style={styles.selectFieldContent}>
+                      <Text style={styles.selectFieldValue}>{selectedPlan?.name || 'None (Manual)'}</Text>
+                      <MaterialCommunityIcons
+                        color={colors.textDim}
+                        name={isPlanSelectorOpen ? 'chevron-up' : 'chevron-down'}
+                        size={20}
+                      />
+                    </View>
+                  </Pressable>
+                  {isPlanSelectorOpen && (
+                    <View style={styles.selectDropdown}>
+                      <Pressable
+                        onPress={() => {
+                          setSelectedPlanId(null);
+                          setPlannedExercises([]);
+                          setIsPlanSelectorOpen(false);
+                        }}
+                        style={styles.dropdownOption}
+                      >
+                        <Text style={styles.dropdownOptionText}>None (Manual)</Text>
+                      </Pressable>
+                      {(plansQuery.data || []).map((plan) => (
                         <Pressable
                           key={plan.plan_id}
                           onPress={() => applyPlan(plan)}
-                          style={[styles.selectOption, isActive && styles.selectOptionActive]}
+                          style={styles.dropdownOption}
                         >
-                          <Text style={[styles.selectOptionText, isActive && styles.selectOptionTextActive]}>{plan.name}</Text>
+                          <Text style={styles.dropdownOptionText}>{plan.name}</Text>
                         </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
-                {plansQuery.isLoading ? <Text style={styles.mutedInline}>Loading planned days...</Text> : null}
-
-                <Text style={styles.selectLabel}>Note</Text>
-                <TextInput
-                  value={createNote}
-                  onChangeText={setCreateNote}
-                  placeholder="Optional note for this workout"
-                  placeholderTextColor="rgba(244,244,245,0.35)"
-                  style={styles.noteInput}
-                />
-              </View>
-            ) : (
-              <View style={styles.stepBlock}>
-                <Text style={styles.selectLabel}>Apply Saved Plan (Optional)</Text>
-                {plansQuery.isLoading ? <Text style={styles.mutedInline}>Loading day plans...</Text> : null}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.planChipRow}>
-                  {(plansQuery.data || []).map((plan) => {
-                    const active = selectedPlanId === plan.plan_id;
-                    return (
-                      <Pressable
-                        key={plan.plan_id}
-                        onPress={() => applyPlan(plan)}
-                        style={[styles.planChip, active && styles.planChipActive]}
-                      >
-                        <Text style={[styles.planChipText, active && styles.planChipTextActive]}>{plan.name}</Text>
-                        <Text style={[styles.planChipMeta, active && styles.planChipMetaActive]}>
-                          {plan.exercises?.length || 0} ex
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-
-                {selectedPlan ? (
-                  <View style={styles.selectedPlanCard}>
-                    <View style={styles.selectedPlanHead}>
-                      <Text style={styles.selectedPlanName}>{selectedPlan.name}</Text>
-                      <Pressable onPress={() => navigation.navigate('PlanDayManager', { planId: selectedPlan.plan_id })}>
-                        <Text style={styles.selectedPlanEdit}>Edit Plan</Text>
-                      </Pressable>
-                    </View>
-                    {selectedPlan.notes ? <Text style={styles.selectedPlanNotes}>{selectedPlan.notes}</Text> : null}
-                    {(selectedPlan.exercises || [])
-                      .slice()
-                      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-                      .map((item) => (
-                        <View key={item.plan_exercise_id} style={styles.selectedPlanExerciseRow}>
-                          <Text style={styles.selectedPlanExerciseName}>{item.exercise?.name || `Exercise ${item.exercise_id}`}</Text>
-                          <Text style={styles.selectedPlanExerciseMeta}>
-                            {item.planned_sets} x {item.planned_reps}
-                          </Text>
-                        </View>
                       ))}
-                  </View>
-                ) : null}
-
-                <Text style={styles.selectLabel}>Add Planned Exercises</Text>
-                <TextInput
-                  value={exerciseSearch}
-                  onChangeText={setExerciseSearch}
-                  placeholder="Search exercise by name"
-                  placeholderTextColor="rgba(244,244,245,0.35)"
-                  style={styles.searchInput}
-                />
-                {exercisesQuery.isLoading ? <Text style={styles.mutedInline}>Loading exercises...</Text> : null}
-
-                <ScrollView style={styles.exerciseList} nestedScrollEnabled>
-                  {groupedExerciseOptions.length === 0 && !exercisesQuery.isLoading ? (
-                    <Text style={styles.mutedInline}>No exercises match your search.</Text>
-                  ) : null}
-                  {groupedExerciseOptions.map((group) => (
-                    <View key={group.category} style={styles.groupBlock}>
-                      <Text style={styles.groupTitle}>{group.category}</Text>
-                      {group.items.map((exercise) => {
-                        const alreadyAdded = plannedExercises.some((p) => p.exercise_id === exercise.exercise_id);
-                        return (
-                          <Pressable
-                            key={exercise.exercise_id}
-                            style={styles.exercisePick}
-                            onPress={() => addPlannedExercise(exercise)}
-                          >
-                            <Text style={styles.exercisePickText}>{exercise.name}</Text>
-                            <Text style={alreadyAdded ? styles.addedTag : styles.addSet}>{alreadyAdded ? 'Added' : '+ Add'}</Text>
-                          </Pressable>
-                        );
-                      })}
                     </View>
-                  ))}
-                </ScrollView>
+                  )}
+                </View>
+
+                <View style={styles.formCard}>
+                  <Text style={styles.formLabel}>NOTE</Text>
+                  <TextInput
+                    value={createNote}
+                    onChangeText={setCreateNote}
+                    placeholder="Add notes about this session..."
+                    placeholderTextColor={colors.textDim}
+                    style={styles.noteInput}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+              </ScrollView>
+            ) : (
+              <ScrollView style={styles.modalScroll} contentContainerStyle={styles.modalScrollContent}>
+                <View style={styles.formCard}>
+                  <Text style={styles.formLabel}>ADD EXERCISES</Text>
+                  <View style={styles.searchFieldGlass}>
+                    <MaterialCommunityIcons color={colors.textDim} name="magnify" size={18} />
+                    <TextInput
+                      value={exerciseSearch}
+                      onChangeText={setExerciseSearch}
+                      placeholder="Search exercises..."
+                      placeholderTextColor={colors.textDim}
+                      style={styles.searchFieldInput}
+                    />
+                  </View>
+
+                  <ScrollView style={styles.exercisePickerList} nestedScrollEnabled>
+                    {groupedExerciseOptions.length === 0 && exercisesQuery.isLoading ? (
+                      <Text style={styles.mutedText}>Loading exercises...</Text>
+                    ) : null}
+                    {groupedExerciseOptions.length === 0 && !exercisesQuery.isLoading ? (
+                      <Text style={styles.mutedText}>No exercises found</Text>
+                    ) : null}
+                    {groupedExerciseOptions.map((group) => (
+                      <View key={group.category}>
+                        <Text style={styles.groupCategoryLabel}>{group.category}</Text>
+                        {group.items.map((exercise) => {
+                          const alreadyAdded = plannedExercises.some((p) => p.exercise_id === exercise.exercise_id);
+                          return (
+                            <Pressable
+                              key={exercise.exercise_id}
+                              style={styles.exercisePickerCard}
+                              onPress={() => addPlannedExercise(exercise)}
+                            >
+                              <View style={styles.exercisePickerIconBox}>
+                                <MaterialCommunityIcons color={colors.primary} name="dumbbell" size={16} />
+                              </View>
+                              <View style={styles.exercisePickerInfo}>
+                                <Text style={styles.exercisePickerName}>{exercise.name}</Text>
+                              </View>
+                              <View style={[styles.addBadge, alreadyAdded && styles.addBadgeActive]}>
+                                <Text style={[styles.addBadgeText, alreadyAdded && styles.addBadgeTextActive]}>
+                                  {alreadyAdded ? '✓' : '+'}
+                                </Text>
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
 
                 {plannedExercises.length > 0 ? (
-                  <View style={styles.plannedList}>
-                    {plannedExercises.map((item) => (
-                      <View key={item.exercise_id} style={styles.plannedRow}>
-                        <Text style={styles.plannedName}>{item.name}</Text>
-                        <TextInput
-                          style={styles.planInput}
-                          keyboardType="numeric"
-                          value={String(item.planned_sets)}
-                          onChangeText={(v) => patchPlannedExercise(item.exercise_id, { planned_sets: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
-                        />
-                        <Text style={styles.inputLabel}>sets</Text>
-                        <TextInput
-                          style={styles.planInput}
-                          keyboardType="numeric"
-                          value={String(item.planned_reps)}
-                          onChangeText={(v) => patchPlannedExercise(item.exercise_id, { planned_reps: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
-                        />
-                        <Text style={styles.inputLabel}>reps</Text>
-                        <Pressable onPress={() => removePlannedExercise(item.exercise_id)}>
-                          <Text style={styles.deleteSet}>Del</Text>
-                        </Pressable>
+                  <View style={styles.formCard}>
+                    <View style={styles.selectedExercisesHead}>
+                      <Text style={styles.sectionTitle}>Selected</Text>
+                      <Text style={styles.sectionMeta}>{plannedExercises.length}</Text>
+                    </View>
+                    {plannedExercises.map((item, idx) => (
+                      <View key={item.exercise_id} style={styles.selectedExerciseCard}>
+                        <View style={styles.selectedExerciseHead}>
+                          <Text style={styles.selectedExerciseIndex}>{idx + 1}</Text>
+                          <View style={styles.selectedExerciseInfo}>
+                            <Text style={styles.selectedExerciseName}>{item.name}</Text>
+                          </View>
+                          <Pressable style={styles.removeExerciseBtn} onPress={() => removePlannedExercise(item.exercise_id)}>
+                            <MaterialCommunityIcons color={colors.textDim} name="close" size={16} />
+                          </Pressable>
+                        </View>
+                        <View style={styles.selectedExerciseInputs}>
+                          <View style={styles.inputGroupSmall}>
+                            <Text style={styles.inputGroupLabel}>SETS</Text>
+                            <TextInput
+                              style={styles.setRepsInputSmall}
+                              keyboardType="numeric"
+                              value={String(item.planned_sets)}
+                              onChangeText={(v) => patchPlannedExercise(item.exercise_id, { planned_sets: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
+                            />
+                          </View>
+                          <View style={styles.inputGroupSmall}>
+                            <Text style={styles.inputGroupLabel}>REPS</Text>
+                            <TextInput
+                              style={styles.setRepsInputSmall}
+                              keyboardType="numeric"
+                              value={String(item.planned_reps)}
+                              onChangeText={(v) => patchPlannedExercise(item.exercise_id, { planned_reps: Math.max(1, Number(v.replace(/[^0-9]/g, '')) || 1) })}
+                            />
+                          </View>
+                        </View>
                       </View>
                     ))}
                   </View>
-                ) : (
-                  <Text style={styles.mutedInline}>No planned exercises selected.</Text>
-                )}
-              </View>
+                ) : null}
+              </ScrollView>
             )}
 
-            <View style={styles.modalActions}>
-              <Pressable onPress={() => (createStep === 1 ? setIsCreateModalOpen(false) : setCreateStep(1))}>
-                <Text style={styles.monthNavText}>{createStep === 1 ? 'Cancel' : 'Back'}</Text>
+            <View style={styles.modalFooter}>
+              <Pressable style={styles.cancelBtn} onPress={() => (createStep === 1 ? setIsCreateModalOpen(false) : setCreateStep(1))}>
+                <Text style={styles.cancelBtnText}>{createStep === 1 ? 'Cancel' : 'Back'}</Text>
               </Pressable>
-
               <Pressable
+                style={[styles.createBtn, !((createStep === 1 && createType) || (createStep === 2 && plannedExercises.length > 0)) && styles.createBtnDisabled]}
                 onPress={() => {
                   if (createStep === 1) {
+                    if (!createType) {
+                      Alert.alert('Validation', 'Please select a session type');
+                      return;
+                    }
                     setCreateStep(2);
+                    return;
+                  }
+                  if (plannedExercises.length === 0) {
+                    Alert.alert('Validation', 'Please add at least one exercise');
                     return;
                   }
                   createMutation.mutate();
                 }}
+                disabled={!((createStep === 1 && createType) || (createStep === 2 && plannedExercises.length > 0)) || createMutation.isPending}
               >
-                <Text style={styles.modalConfirm}>{createStep === 1 ? 'Next' : (createMutation.isPending ? 'Creating...' : 'Create Session')}</Text>
+                <Text style={styles.createBtnText}>
+                  {createMutation.isPending ? 'CREATING...' : createStep === 1 ? 'NEXT' : 'CREATE SESSION'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -693,15 +755,45 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: '#060709',
     paddingHorizontal: 18,
-    paddingTop: 14,
-    gap: 14,
+    paddingTop: 18,
+    paddingBottom: 28,
+    gap: 18,
   },
-  heroCard: {
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  profileBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.16)',
-    backgroundColor: 'rgba(10,11,14,0.92)',
-    padding: 16,
-    gap: 8,
+    borderColor: 'rgba(59,130,246,0.25)',
+    backgroundColor: 'rgba(59,130,246,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startSessionBtn: {
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    paddingVertical: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.28,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 24,
+    elevation: 8,
+  },
+  startSessionText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 16,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   kicker: {
     color: colors.primary,
@@ -712,142 +804,147 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
-  subtitle: {
-    color: 'rgba(244,244,245,0.55)',
-    fontWeight: '600',
-    letterSpacing: 0.6,
-  },
   metricsRow: {
-    marginTop: 8,
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
   },
   metricCard: {
     flex: 1,
     borderWidth: 1,
     borderColor: 'rgba(244,244,245,0.12)',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
     backgroundColor: 'rgba(10,11,14,0.92)',
     gap: 4,
+    borderRadius: 18,
   },
   metricLabel: {
     color: 'rgba(244,244,245,0.45)',
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.1,
     textTransform: 'uppercase',
+    fontWeight: '700',
   },
   metricValue: {
     color: colors.textPrimary,
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '900',
+  },
+  metricUnit: {
+    color: 'rgba(244,244,245,0.4)',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  metricTrendRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metricTrendText: {
+    color: '#60a5fa',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  metricTrendTextDown: {
+    color: '#f87171',
   },
   panel: {
     borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.16)',
-    backgroundColor: 'rgba(10,11,14,0.92)',
-    padding: 14,
-    gap: 10,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 16,
+    gap: 14,
+    borderRadius: 22,
   },
-  panelTitle: {
-    color: colors.primary,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  selectLabel: {
-    color: 'rgba(244,244,245,0.65)',
-    fontSize: 11,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    fontWeight: '700',
-  },
-  selectBox: {
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.18)',
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  panelHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
   },
-  selectValue: {
+  sectionHeading: {
     color: colors.textPrimary,
-    fontSize: 14,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  panelBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  panelBadgeText: {
+    color: 'rgba(244,244,245,0.62)',
+    fontSize: 11,
     fontWeight: '600',
-  },
-  selectChevron: {
-    color: 'rgba(244,244,245,0.72)',
-    fontSize: 12,
-  },
-  selectMenu: {
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.16)',
-    backgroundColor: 'rgba(12,14,18,0.98)',
-  },
-  selectOption: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(244,244,245,0.08)',
-  },
-  selectOptionActive: {
-    backgroundColor: 'rgba(59,130,246,0.2)',
-  },
-  selectOptionText: {
-    color: 'rgba(244,244,245,0.82)',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  selectOptionTextActive: {
-    color: colors.primary,
   },
   muted: {
     color: 'rgba(244,244,245,0.5)',
     textAlign: 'center',
     marginTop: 8,
   },
-  mutedInline: {
-    color: 'rgba(244,244,245,0.5)',
-    fontSize: 12,
-  },
-  splitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  pieWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 99,
-  },
-  splitLabel: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 12,
-  },
-  splitValue: {
-    width: 52,
-    color: colors.textPrimary,
-    textAlign: 'right',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  calendarHeader: {
+  focusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 14,
+  },
+  focusChartWrap: {
+    width: 160,
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  focusCenterLabel: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 96,
+  },
+  focusPercent: {
+    color: colors.textPrimary,
+    fontSize: 30,
+    fontWeight: '900',
+  },
+  focusCaption: {
+    color: 'rgba(244,244,245,0.45)',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  focusLegend: {
+    flex: 1,
+    gap: 14,
+  },
+  focusLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  legendDotLarge: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+  },
+  focusLegendTextWrap: {
+    flex: 1,
+  },
+  focusLegendTitle: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  focusLegendSub: {
+    color: 'rgba(244,244,245,0.45)',
+    fontSize: 11,
+    marginTop: 2,
   },
   monthNav: {
     flexDirection: 'row',
@@ -855,16 +952,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   monthLabel: {
-    color: 'rgba(244,244,245,0.7)',
-    fontSize: 12,
-    fontWeight: '600',
-    minWidth: 94,
-    textAlign: 'center',
-  },
-  monthNavText: {
     color: colors.textPrimary,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
+    minWidth: 68,
+    textAlign: 'center',
   },
   weekRow: {
     flexDirection: 'row',
@@ -872,26 +964,36 @@ const styles = StyleSheet.create({
   weekCell: {
     width: `${100 / 7}%`,
     textAlign: 'center',
-    color: 'rgba(244,244,245,0.45)',
-    fontSize: 11,
+    color: 'rgba(244,244,245,0.35)',
+    fontSize: 10,
+    fontWeight: '900',
     marginBottom: 4,
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 6,
   },
   dayCell: {
-    width: '14.2857%',
-    height: 46,
+    width: '13.1%',
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.08)',
+    borderColor: 'transparent',
+    backgroundColor: 'rgba(30,41,59,0.3)',
+    borderRadius: 12,
     gap: 4,
   },
+  dayCellOutside: {
+    backgroundColor: 'transparent',
+  },
   daySelected: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.18)',
+    backgroundColor: colors.primary,
+  },
+  dayHasSession: {
+    backgroundColor: 'rgba(59,130,246,0.12)',
+    borderColor: 'rgba(59,130,246,0.3)',
   },
   dayText: {
     color: colors.textPrimary,
@@ -899,6 +1001,7 @@ const styles = StyleSheet.create({
   },
   dayTextSelected: {
     fontWeight: '700',
+    color: '#ffffff',
   },
   dayOut: {
     color: 'rgba(244,244,245,0.35)',
@@ -909,34 +1012,46 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: colors.primary,
   },
+  selectedDayHint: {
+    color: 'rgba(244,244,245,0.42)',
+    fontSize: 11,
+    fontWeight: '600',
+  },
   sessionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: 'rgba(12,14,18,0.96)',
     borderWidth: 1,
     borderColor: 'rgba(244,244,245,0.12)',
-    padding: 12,
-    marginBottom: 8,
-    gap: 8,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 10,
+    gap: 10,
   },
-  sessionActions: {
+  sessionIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  sessionContent: {
+    flex: 1,
+  },
+  sessionRight: {
     alignItems: 'flex-end',
     gap: 6,
   },
-  deleteSession: {
-    color: '#fda4af',
-    fontSize: 11,
-    fontWeight: '700',
-  },
   sessionTitle: {
     color: colors.textPrimary,
-    fontWeight: '700',
+    fontWeight: '800',
+    fontSize: 14,
   },
   sessionSub: {
     color: 'rgba(244,244,245,0.5)',
     marginTop: 3,
-    maxWidth: 230,
     fontSize: 12,
   },
   badge: {
@@ -955,257 +1070,479 @@ const styles = StyleSheet.create({
     color: colors.accent,
     backgroundColor: 'rgba(37,99,235,0.18)',
   },
+  fabButton: {
+    position: 'absolute',
+    right: 22,
+    bottom: 26,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 20,
+    elevation: 10,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContainerGlass: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: 'rgba(8, 10, 14, 0.98)',
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderTopColor: 'rgba(59, 130, 246, 0.15)',
+    borderLeftColor: 'rgba(59, 130, 246, 0.15)',
+    borderRightColor: 'rgba(59, 130, 246, 0.15)',
+    maxHeight: '92%',
+    overflow: 'hidden',
+    flex: 1,
+    flexDirection: 'column',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(59, 130, 246, 0.15)',
+  },
+  modalBackBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
   },
-  modalCard: {
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.2)',
-    backgroundColor: 'rgba(8,10,14,0.98)',
-    padding: 14,
-    gap: 10,
-    maxHeight: '88%',
+  modalCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  modalTitle: {
-    color: colors.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
+  modalHeaderText: {
+    flex: 1,
   },
-  stepIndicator: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  stepBlock: {
-    gap: 8,
-    flexShrink: 1,
-  },
-  exerciseList: {
-    maxHeight: 240,
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.12)',
-    paddingHorizontal: 8,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.18)',
-    color: colors.textPrimary,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    minHeight: 40,
-  },
-  groupBlock: {
-    paddingVertical: 4,
-  },
-  groupTitle: {
+  modalHeaderKicker: {
     color: colors.primary,
     fontSize: 10,
-    fontWeight: '700',
+    letterSpacing: 2.0,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: 4,
+    fontWeight: '700',
   },
-  dateRow: {
+  modalHeaderTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  stepTrack: {
+    height: 3,
+    backgroundColor: 'rgba(244, 244, 245, 0.08)',
+    overflow: 'hidden',
+  },
+  stepTrackBar: {
+    height: '100%',
+    backgroundColor: colors.primary,
+  },
+  modalScroll: {
+    flex: 1,
+  },
+  modalScrollContent: {
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    gap: 14,
+    flexGrow: 1,
+  },
+  formCard: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(15, 17, 21, 0.65)',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    gap: 10,
+    borderRadius: 8,
+  },
+  formLabel: {
+    color: colors.textDim,
+    fontSize: 10,
+    letterSpacing: 2.0,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  // Date input styling
+  dateNavRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  dateNavBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
   },
   dateValue: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
+    flex: 1,
+  },
+  // Type chips
+  typeChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  typeChip: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    backgroundColor: 'rgba(5, 7, 10, 0.8)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  typeChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+  },
+  typeChipText: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  typeChipTextActive: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  // Select field styling
+  selectField: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    backgroundColor: 'rgba(5, 7, 10, 0.8)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  selectFieldContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectFieldValue: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  selectDropdown: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: 'rgba(5, 7, 10, 0.9)',
+    borderRadius: 6,
+    overflow: 'hidden',
+    maxHeight: 200,
+  },
+  dropdownOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(59, 130, 246, 0.1)',
+  },
+  dropdownOptionText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '500',
   },
   noteInput: {
     borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.18)',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    backgroundColor: 'rgba(5, 7, 10, 0.8)',
     color: colors.textPrimary,
-    paddingHorizontal: 10,
     paddingVertical: 10,
-    minHeight: 42,
-  },
-  exercisePick: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(244,244,245,0.08)',
-  },
-  exercisePickText: {
-    color: colors.textPrimary,
+    paddingHorizontal: 12,
+    borderRadius: 6,
     fontSize: 13,
-    flex: 1,
-    paddingRight: 8,
+    minHeight: 70,
+    textAlignVertical: 'top',
   },
-  plannedList: {
-    marginTop: 8,
-    gap: 8,
-  },
-  plannedRow: {
+  // Search field with icon
+  searchFieldGlass: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.12)',
-    padding: 8,
-  },
-  plannedName: {
-    color: colors.textPrimary,
-    flex: 1,
-    fontSize: 12,
-  },
-  inputLabel: {
-    color: 'rgba(244,244,245,0.5)',
-    fontSize: 11,
-    width: 30,
-  },
-  deleteSet: {
-    color: '#fda4af',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  addSet: {
-    color: colors.primary,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  planChipRow: {
-    gap: 8,
-    paddingVertical: 2,
-  },
-  planChip: {
-    minWidth: 120,
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.2)',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    backgroundColor: 'rgba(5, 7, 10, 0.8)',
+    paddingVertical: 0,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    borderRadius: 6,
+    gap: 8,
   },
-  planChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: 'rgba(59,130,246,0.18)',
-  },
-  planChipText: {
+  searchFieldInput: {
+    flex: 1,
     color: colors.textPrimary,
-    fontWeight: '700',
-    fontSize: 12,
+    paddingVertical: 10,
+    fontSize: 13,
   },
-  planChipTextActive: {
+  // Exercise picker list
+  exercisePickerList: {
+    maxHeight: 240,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 244, 245, 0.12)',
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  groupCategoryLabel: {
     color: colors.primary,
-  },
-  planChipMeta: {
-    marginTop: 2,
-    color: 'rgba(244,244,245,0.45)',
     fontSize: 10,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    fontWeight: '700',
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
-  planChipMetaActive: {
-    color: colors.primary,
-  },
-  actionTiles: {
+  exercisePickerCard: {
     flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(244, 244, 245, 0.08)',
     gap: 10,
   },
-  actionTile: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.16)',
-    backgroundColor: 'rgba(10,11,14,0.92)',
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    gap: 4,
+  exercisePickerIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  actionTileTitle: {
+  exercisePickerInfo: {
+    flex: 1,
+  },
+  exercisePickerName: {
     color: colors.textPrimary,
     fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    fontWeight: '600',
   },
-  actionTileSub: {
-    color: 'rgba(244,244,245,0.55)',
-    fontSize: 11,
+  addBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
   },
-  selectedPlanCard: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(59,130,246,0.38)',
-    backgroundColor: 'rgba(9,13,20,0.92)',
-    padding: 10,
-    gap: 6,
+  addBadgeActive: {
+    backgroundColor: colors.primary,
   },
+  addBadgeText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  addBadgeTextActive: {
+    color: '#ffffff',
+  },
+  // Selected plan display
   selectedPlanHead: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
-  },
-  selectedPlanName: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-    flex: 1,
-  },
-  selectedPlanEdit: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(59, 130, 246, 0.15)',
   },
   selectedPlanNotes: {
-    color: 'rgba(244,244,245,0.62)',
+    color: colors.textDim,
     fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(244,244,245,0.1)',
-    paddingBottom: 6,
+    borderBottomColor: 'rgba(244, 244, 245, 0.08)',
   },
-  selectedPlanExerciseRow: {
+  planExerciseItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     gap: 8,
+    paddingVertical: 6,
   },
-  selectedPlanExerciseName: {
-    color: colors.textPrimary,
-    fontSize: 12,
+  exerciseItemIndex: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    color: '#ffffff',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  exerciseItemContent: {
     flex: 1,
   },
-  selectedPlanExerciseMeta: {
-    color: colors.primary,
+  exerciseItemName: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  exerciseItemMeta: {
+    color: colors.textDim,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  sectionTitle: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  sectionMeta: {
+    color: colors.textDim,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  // Selected exercises list
+  selectedExercisesHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(59, 130, 246, 0.15)',
+  },
+  selectedExerciseCard: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.15)',
+    backgroundColor: 'rgba(5, 7, 10, 0.8)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  selectedExerciseHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(59, 130, 246, 0.1)',
+  },
+  selectedExerciseIndex: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    color: '#ffffff',
+    textAlign: 'center',
+    textAlignVertical: 'center',
     fontSize: 11,
     fontWeight: '700',
   },
-  addedTag: {
-    color: colors.green,
-    fontWeight: '700',
-    fontSize: 12,
+  selectedExerciseInfo: {
+    flex: 1,
   },
-  planInput: {
-    width: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(244,244,245,0.18)',
+  selectedExerciseName: {
     color: colors.textPrimary,
-    paddingVertical: 4,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  removeExerciseBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(244, 244, 245, 0.08)',
+  },
+  selectedExerciseInputs: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  inputGroupSmall: {
+    flex: 1,
+    gap: 4,
+  },
+  inputGroupLabel: {
+    color: colors.textDim,
+    fontSize: 9,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    fontWeight: '700',
+  },
+  setRepsInputSmall: {
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+    backgroundColor: 'rgba(5, 7, 10, 0.6)',
+    color: colors.textPrimary,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    fontSize: 12,
+    fontWeight: '700',
     textAlign: 'center',
   },
-  modalActions: {
-    marginTop: 4,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  mutedText: {
+    color: colors.textDim,
+    textAlign: 'center',
+    paddingVertical: 12,
+    fontSize: 12,
   },
-  modalConfirm: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '800',
+  // Modal footer
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(59, 130, 246, 0.15)',
+  },
+  cancelBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.textDim,
+    paddingVertical: 11,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  cancelBtnText: {
+    color: colors.textDim,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1.0,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+  },
+  createBtn: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 11,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  createBtnDisabled: {
+    backgroundColor: 'rgba(59, 130, 246, 0.3)',
+    opacity: 0.5,
   },
 });
