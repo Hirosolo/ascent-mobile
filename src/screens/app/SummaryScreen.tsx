@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Dimensions,
   FlatList,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -17,10 +16,9 @@ import {
   getDaysInMonth,
 } from "date-fns";
 import { Screen } from "@/components/ui/Screen";
+import { PeriodWheelPicker } from "@/components/ui/PeriodWheelPicker";
 import { getSummary } from "@/services/summary";
 import { colors } from "@/theme/tokens";
-
-type CalendarStep = "year" | "month";
 
 type SummaryPoint = {
   label: string;
@@ -243,8 +241,7 @@ export function SummaryScreen() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [calendarStep, setCalendarStep] = useState<CalendarStep>("year");
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [activeNutritionKeys, setActiveNutritionKeys] = useState<
     Set<NutritionKey>
   >(new Set(["protein", "carbs"] as NutritionKey[]));
@@ -376,10 +373,7 @@ export function SummaryScreen() {
 
       <View style={styles.periodWrap}>
         <Pressable
-          onPress={() => {
-            setCalendarStep("year");
-            setIsCalendarOpen(true);
-          }}
+          onPress={() => setIsPickerOpen(true)}
           style={styles.periodBtn}
         >
           <Text style={styles.periodLabel}>Select Period</Text>
@@ -513,117 +507,17 @@ export function SummaryScreen() {
         </View>
       </View>
 
-      <Modal
-        visible={isCalendarOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setIsCalendarOpen(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.calendarModal}>
-            <View style={styles.calendarHeader}>
-              <Text style={styles.calendarTitle}>
-                {calendarStep === "year"
-                  ? "Select a Year"
-                  : `Year ${selectedYear}`}
-              </Text>
-              <Pressable onPress={() => setIsCalendarOpen(false)}>
-                <MaterialCommunityIcons
-                  color={colors.textPrimary}
-                  name="close"
-                  size={20}
-                />
-              </Pressable>
-            </View>
-
-            <View style={styles.calendarStepRow}>
-              <Pressable
-                onPress={() => setCalendarStep("year")}
-                style={[
-                  styles.stepBtn,
-                  calendarStep === "year" ? styles.stepBtnActive : undefined,
-                ]}
-              >
-                <Text style={styles.stepBtnText}>Year</Text>
-              </Pressable>
-              <Pressable
-                disabled={calendarStep === "year"}
-                onPress={() => setCalendarStep("month")}
-                style={[
-                  styles.stepBtn,
-                  calendarStep === "month" ? styles.stepBtnActive : undefined,
-                ]}
-              >
-                <Text style={styles.stepBtnText}>Month</Text>
-              </Pressable>
-            </View>
-
-            {calendarStep === "year" ? (
-              <FlatList
-                data={years}
-                numColumns={4}
-                keyExtractor={(item) => String(item.getFullYear())}
-                contentContainerStyle={styles.yearGrid}
-                renderItem={({ item }) => {
-                  const year = item.getFullYear();
-                  const active = year === selectedYear;
-                  return (
-                    <Pressable
-                      onPress={() => {
-                        setSelectedYear(year);
-                        setCalendarStep("month");
-                      }}
-                      style={[
-                        styles.yearCell,
-                        active ? styles.yearCellActive : undefined,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.yearText,
-                          active ? styles.yearTextActive : undefined,
-                        ]}
-                      >
-                        {year}
-                      </Text>
-                    </Pressable>
-                  );
-                }}
-                style={styles.yearList}
-              />
-            ) : (
-              <View style={styles.monthGrid}>
-                {months.map((monthDate) => {
-                  const monthIndex = monthDate.getMonth();
-                  const active = monthIndex === selectedMonth;
-                  return (
-                    <Pressable
-                      key={monthIndex}
-                      onPress={() => {
-                        setSelectedMonth(monthIndex);
-                        setIsCalendarOpen(false);
-                      }}
-                      style={[
-                        styles.monthCell,
-                        active ? styles.monthCellActive : undefined,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.monthText,
-                          active ? styles.monthTextActive : undefined,
-                        ]}
-                      >
-                        {format(monthDate, "MMM")}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <PeriodWheelPicker
+        visible={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        onConfirm={(year, month) => {
+          setSelectedYear(year);
+          setSelectedMonth(month);
+          setIsPickerOpen(false);
+        }}
+        defaultYear={selectedYear}
+        defaultMonth={selectedMonth}
+      />
 
       {isLoadingSummary ? (
         <View style={styles.loadingOverlay}>

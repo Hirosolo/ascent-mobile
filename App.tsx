@@ -14,7 +14,6 @@ import { VerifyEmailScreen } from '@/screens/auth/VerifyEmailScreen';
 import { WorkoutScreen } from '@/screens/app/WorkoutScreen';
 import { NutritionScreen } from '@/screens/app/NutritionScreen';
 import { SummaryScreen } from '@/screens/app/SummaryScreen';
-import { ProgramsScreen } from './src/screens/app/ProgramsScreen';
 import { ProfileScreen } from '@/screens/app/ProfileScreen';
 import { WorkoutDetailScreen } from '@/screens/app/WorkoutDetailScreen';
 import { PlanDayManagerScreen } from '@/screens/app/PlanDayManagerScreen';
@@ -30,7 +29,6 @@ type AppTabParamList = {
   Workout: undefined;
   Nutrition: undefined;
   Summary: undefined;
-  Programs: undefined;
   Profile: undefined;
 };
 
@@ -99,13 +97,6 @@ function HomeTabs() {
         name="Summary"
         options={{
           tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="chart-line" size={size} />,
-        }}
-      />
-      <Tab.Screen
-        component={ProgramsScreen}
-        name="Programs"
-        options={{
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons color={color} name="school" size={size} />,
         }}
       />
       <Tab.Screen

@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -174,6 +175,7 @@ function fmtNutrient(value: number | null | undefined, withUnit = false): string
 }
 
 export function NutritionScreen() {
+  const { height: windowHeight } = useWindowDimensions();
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [meals, setMeals] = useState<NormalisedMeal[]>([]);
   const [selectedMeal, setSelectedMeal] = useState<NormalisedMeal | null>(null);
@@ -541,6 +543,8 @@ export function NutritionScreen() {
     ];
   }, [macros]);
 
+  const logSectionHeight = Math.max(360, Math.round(windowHeight * 0.42));
+
   return (
     <Screen scroll refreshing={isRefreshing} onRefresh={handleRefresh} contentStyle={styles.screen}>
       <View style={styles.headerRow}>
@@ -630,70 +634,76 @@ export function NutritionScreen() {
         </View>
       </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Nutrition Log</Text>
-      </View>
-
-      {isLoading ? <ActivityIndicator color={colors.primary} /> : null}
-
-      {!isLoading && meals.length === 0 ? (
-        <View style={styles.emptyState}>
-          <MaterialCommunityIcons color="rgba(255,255,255,0.12)" name="silverware-variant" size={52} />
-          <Text style={styles.emptyTitle}>No Fuel Logged Today</Text>
-          <Text style={styles.emptySubtitle}>Initialize performance tracking...</Text>
+      <View style={[styles.logSection, { height: logSectionHeight }]}> 
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Nutrition Log</Text>
         </View>
-      ) : null}
 
-      {orderedMeals.map((meal, idx) => {
-        const group = mapMealTypeToGroup(meal.mealType);
-        const groupColor = MEAL_GROUP_COLORS[group];
-        const imageUri = mealTypeImage(meal.mealType);
-
-        return (
-          <Pressable
-            key={meal.meal_id}
-            style={[styles.mealCard, idx > 0 && styles.mealCardGap, { borderLeftColor: groupColor }]}
-            onPress={() => void openMealDetail(meal)}
+        <View style={styles.logBody}>
+          <ScrollView
+            bounces={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.logContent}
           >
-            <View style={styles.mealRow}>
-              <View style={styles.mealThumbWrap}>
-                {imageUri ? <Image source={{ uri: imageUri }} style={styles.mealThumb} /> : null}
-                <View style={styles.mealThumbShade} />
-                <MaterialCommunityIcons color={groupColor} name={mealTypeIcon(meal.mealType)} size={20} style={styles.mealThumbIcon} />
-              </View>
+            {isLoading ? <View style={styles.loadingWrap}><ActivityIndicator color={colors.primary} /></View> : null}
 
-              <View style={styles.mealContent}>
-                <View style={styles.mealTop}>
-                  <Text style={styles.mealName} numberOfLines={1}>{meal.name}</Text>
-                  <Text style={styles.mealMeta}>{meal.time}</Text>
-                </View>
-
-                <View style={styles.macroPills}>
-                  <View style={[styles.macroPill, styles.pillProtein]}>
-                    <Text style={styles.macroPillText}>P: {Math.round(meal.protein)}g</Text>
-                  </View>
-                  <View style={[styles.macroPill, styles.pillCarbs]}>
-                    <Text style={styles.macroPillText}>C: {Math.round(meal.carbs)}g</Text>
-                  </View>
-                  <View style={[styles.macroPill, styles.pillFats]}>
-                    <Text style={styles.macroPillText}>F: {Math.round(meal.fats)}g</Text>
-                  </View>
-                </View>
+            {!isLoading && meals.length === 0 ? (
+              <View style={styles.emptyState}>
+                <MaterialCommunityIcons color="rgba(255,255,255,0.12)" name="silverware-variant" size={52} />
+                <Text style={styles.emptyTitle}>No Fuel Logged Today</Text>
+                <Text style={styles.emptySubtitle}>Initialize performance tracking...</Text>
               </View>
+            ) : null}
+
+            {orderedMeals.map((meal, idx) => {
+              const group = mapMealTypeToGroup(meal.mealType);
+              const groupColor = MEAL_GROUP_COLORS[group];
+              const imageUri = mealTypeImage(meal.mealType);
+
+              return (
+                <Pressable
+                  key={meal.meal_id}
+                  style={[styles.mealCard, idx > 0 && styles.mealCardGap, { borderLeftColor: groupColor }]}
+                  onPress={() => void openMealDetail(meal)}
+                >
+                  <View style={styles.mealRow}>
+                    <View style={styles.mealThumbWrap}>
+                      {imageUri ? <Image source={{ uri: imageUri }} style={styles.mealThumb} /> : null}
+                      <View style={styles.mealThumbShade} />
+                      <MaterialCommunityIcons color={groupColor} name={mealTypeIcon(meal.mealType)} size={20} style={styles.mealThumbIcon} />
+                    </View>
+
+                    <View style={styles.mealContent}>
+                      <View style={styles.mealTop}>
+                        <Text style={styles.mealName} numberOfLines={1}>{meal.name}</Text>
+                        <Text style={styles.mealMeta}>{meal.time}</Text>
+                      </View>
+
+                      <View style={styles.macroPills}>
+                        <View style={[styles.macroPill, styles.pillProtein]}>
+                          <Text style={styles.macroPillText}>P: {Math.round(meal.protein)}g</Text>
+                        </View>
+                        <View style={[styles.macroPill, styles.pillCarbs]}>
+                          <Text style={styles.macroPillText}>C: {Math.round(meal.carbs)}g</Text>
+                        </View>
+                        <View style={[styles.macroPill, styles.pillFats]}>
+                          <Text style={styles.macroPillText}>F: {Math.round(meal.fats)}g</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {isRefreshing ? (
+            <View pointerEvents="none" style={styles.refreshOverlay}>
+              <ActivityIndicator color={colors.primary} />
             </View>
-          </Pressable>
-        );
-      })}
-
-      <Pressable style={styles.pendingMealCard} onPress={() => void openLogModal()}>
-        <View style={styles.pendingMealIconWrap}>
-          <MaterialCommunityIcons color="rgba(148,163,184,0.7)" name="plus" size={28} />
+          ) : null}
         </View>
-        <View style={styles.pendingMealCopy}>
-          <Text style={styles.pendingMealTitle}>Pending Dinner</Text>
-          <Text style={styles.pendingMealSubtitle}>Tap to record next meal terminal</Text>
-        </View>
-      </Pressable>
+      </View>
 
       <Pressable style={styles.fab} onPress={() => void openLogModal()}>
         <MaterialCommunityIcons color={colors.textPrimary} name="silverware-fork-knife" size={22} />
@@ -1155,35 +1165,6 @@ const styles = StyleSheet.create({
   },
   dateStrip: {
     gap: 8,
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
-  dayBtn: {
-    minWidth: 60,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  dayBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    transform: [{ scale: 1.06 }],
-  },
-  dayLabel: {
-    color: colors.textDim,
-    fontSize: 8,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
-  dayLabelActive: {
-    color: '#fff',
-  },
-  dayNumber: {
-    marginTop: 1,
     color: colors.textPrimary,
     fontSize: 16,
     fontWeight: '800',
@@ -1199,6 +1180,27 @@ const styles = StyleSheet.create({
     padding: 12,
     flexDirection: 'row',
     gap: 12,
+  },
+  logSection: {
+    gap: 10,
+  },
+  logBody: {
+    flex: 1,
+    position: 'relative',
+  },
+  logContent: {
+    gap: 10,
+  },
+  loadingWrap: {
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  refreshOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(5,5,5,0.18)',
   },
   donutWrap: {
     width: 140,
