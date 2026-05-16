@@ -70,6 +70,7 @@ export type MuscleSplitItem = {
 
 export type SummaryData = {
   total_workouts: number;
+  total_completed_workouts?: number;
   total_volume?: number;
   gr_score: number;
   gr_avg?: number;

@@ -35,11 +35,6 @@ function getCurrentMonth() {
   return `${now.getFullYear()}-${month}`;
 }
 
-function formatVolume(value?: number) {
-  if (!value || value <= 0) return '0';
-  return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value));
-}
-
 function sanitizeDecimalInput(value: string): string {
   const cleaned = value.replace(/[^0-9.]/g, '');
   const firstDot = cleaned.indexOf('.');
@@ -675,9 +670,9 @@ export function ProfileScreen() {
         </View>
         <Text style={styles.displayName}>{displayName}</Text>
         <View style={styles.tierRow}>
-          <Text style={styles.tierText}>Elite Tier</Text>
-          <View style={styles.dot} />
-          <Text style={styles.levelText}>Level 42</Text>
+          <Text style={styles.memberText}>
+            A member from {daysJoined === '-' ? 'today' : `${daysJoined} days`}
+          </Text>
         </View>
         <View style={styles.statusPill}>
           <View style={styles.statusDot} />
@@ -687,15 +682,8 @@ export function ProfileScreen() {
 
       <View style={styles.statsGrid}>
         <View style={styles.statTile}>
-          <Text style={styles.statLabel}>Total Weight</Text>
-          <Text style={styles.statValue}>
-            {summary ? formatVolume(summary.total_volume) : '--'} <Text style={styles.statUnit}>kg</Text>
-          </Text>
-          <Text style={styles.statTrend}>{summary ? `${summary.gr_score_change >= 0 ? '+' : ''}${summary.gr_score_change}%` : '--'}</Text>
-        </View>
-        <View style={styles.statTile}>
           <Text style={styles.statLabel}>Workouts</Text>
-          <Text style={styles.statValue}>{summary ? summary.total_workouts : '--'}</Text>
+          <Text style={styles.statValue}>{summary ? summary.total_completed_workouts ?? summary.total_workouts : '--'}</Text>
           <Text style={styles.statTrend}>GR {summary ? summary.gr_score : '--'}</Text>
         </View>
         <View style={styles.statTile}>
@@ -975,20 +963,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 2,
   },
-  tierText: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#64748b',
-  },
-  levelText: {
+  memberText: {
     color: '#94a3b8',
     fontSize: 12,
     fontWeight: '500',
