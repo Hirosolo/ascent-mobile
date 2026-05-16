@@ -141,6 +141,159 @@ function PersonalRecordChart({
   );
 }
 
+// ─── EditProfileModal ────────────────────────────────────────────────────────
+
+function EditProfileModal({
+  visible,
+  onClose,
+  onSuccess,
+  initialUsername,
+  initialEmail,
+  initialPhone,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSuccess?: () => void;
+  initialUsername?: string;
+  initialEmail?: string;
+  initialPhone?: string;
+}) {
+  const { updateProfile } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    username: initialUsername ?? '',
+    email: initialEmail ?? '',
+    phone: initialPhone ?? '',
+  });
+
+  useEffect(() => {
+    if (visible) {
+      setForm({
+        username: initialUsername ?? '',
+        email: initialEmail ?? '',
+        phone: initialPhone ?? '',
+      });
+      setError(null);
+    }
+  }, [visible, initialUsername, initialEmail, initialPhone]);
+
+  const handleSave = async () => {
+    setError(null);
+    
+    if (!form.username.trim() && !form.email.trim() && !form.phone.trim()) {
+      setError('Please enter at least one field');
+      return;
+    }
+
+    if (form.username && form.username.length < 1) {
+      setError('Name must not be empty');
+      return;
+    }
+
+    if (form.email && !isValidEmail(form.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (form.phone && form.phone.length < 10) {
+      setError('Phone number must be at least 10 digits');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await updateProfile({
+        username: form.username || undefined,
+        email: form.email || undefined,
+        phone: form.phone || undefined,
+      });
+      onSuccess?.();
+      onClose();
+    } catch (err: any) {
+      setError(err?.message ?? 'Failed to update profile');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isValidEmail = (email: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={modal.overlay}>
+        <View style={modal.sheet}>
+          <View style={modal.header}>
+            <Text style={modal.kicker}>Edit Profile</Text>
+            <Pressable onPress={onClose} style={modal.closeBtn}>
+              <MaterialCommunityIcons color={colors.textDim} name="close" size={20} />
+            </Pressable>
+          </View>
+
+          <Text style={modal.stepTitle}>Personal Information</Text>
+
+          <ScrollView style={modal.scroll} contentContainerStyle={modal.scrollContent}>
+            <Text style={modal.fieldLabel}>Full Name</Text>
+            <TextInput
+              style={modal.input}
+              value={form.username}
+              onChangeText={(v) => setForm((f) => ({ ...f, username: v }))}
+              placeholder="Enter your full name"
+              placeholderTextColor={colors.textDim}
+            />
+
+            <Text style={[modal.fieldLabel, { marginTop: 16 }]}>Email Address</Text>
+            <TextInput
+              style={modal.input}
+              value={form.email}
+              onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
+              placeholder="Enter your email address"
+              placeholderTextColor={colors.textDim}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+
+            <Text style={[modal.fieldLabel, { marginTop: 16 }]}>Phone Number</Text>
+            <TextInput
+              style={modal.input}
+              value={form.phone}
+              onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))}
+              placeholder="Enter your phone number"
+              placeholderTextColor={colors.textDim}
+              keyboardType="phone-pad"
+            />
+          </ScrollView>
+
+          {error ? <Text style={modal.errorText}>{error}</Text> : null}
+
+          <View style={modal.footer}>
+            <Pressable style={modal.backBtn} onPress={onClose}>
+              <Text style={modal.backBtnText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[modal.primaryBtn, isSaving && modal.btnDisabled]}
+              onPress={() => { void handleSave(); }}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Text style={modal.primaryBtnText}>Save Changes</Text>
+                  <MaterialCommunityIcons color="#fff" name="check" size={16} />
+                </>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── UpdateSpecsModal ─────────────────────────────────────────────────────────
 
 const ACTIVITY_OPTIONS: { id: ActivityLevel; label: string; desc: string }[] = [
@@ -603,6 +756,7 @@ export function ProfileScreen() {
   const [specsVisible, setSpecsVisible] = useState(false);
   const [goalVisible, setGoalVisible] = useState(false);
   const [recordVisible, setRecordVisible] = useState(false);
+  const [editProfileVisible, setEditProfileVisible] = useState(false);
   const [recordSearch, setRecordSearch] = useState('');
   const [selectedRecordName, setSelectedRecordName] = useState<string | null>(null);
 
@@ -689,6 +843,7 @@ export function ProfileScreen() {
         {[
           { label: 'Username', value: displayName },
           { label: 'Email', value: profile?.email ?? '-' },
+          { label: 'Phone', value: profile?.phone ?? '-' },
           { label: 'Days Joined', value: daysJoined === '-' ? '-' : `${daysJoined} days` },
         ].map((row, idx, arr) => (
           <View key={row.label}>
@@ -728,6 +883,19 @@ export function ProfileScreen() {
 
       <Text style={styles.sectionTitle}>System Configuration</Text>
       <View style={styles.actionsCard}>
+        <Pressable style={styles.actionRow} onPress={() => setEditProfileVisible(true)}>
+          <View style={styles.actionIconBox}>
+            <MaterialCommunityIcons color={colors.textDim} name="account-edit" size={20} />
+          </View>
+          <View style={styles.actionText}>
+            <Text style={styles.actionTitle}>Edit Profile</Text>
+            <Text style={styles.actionSub}>Update your name and phone</Text>
+          </View>
+          <MaterialCommunityIcons color={colors.textDim} name="chevron-right" size={20} />
+        </Pressable>
+
+        <View style={styles.divider} />
+
         <Pressable style={styles.actionRow} onPress={() => setSpecsVisible(true)}>
           <View style={styles.actionIconBox}>
             <MaterialCommunityIcons color={colors.textDim} name="human-male-height" size={20} />
@@ -843,6 +1011,18 @@ export function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      <EditProfileModal
+        visible={editProfileVisible}
+        onClose={() => setEditProfileVisible(false)}
+        initialUsername={profile?.username ?? profile?.fullname}
+        initialEmail={profile?.email}
+        initialPhone={profile?.phone}
+        onSuccess={() => {
+          void userQuery.refetch();
+          Alert.alert('Success', 'Your profile has been updated.');
+        }}
+      />
 
       <UpdateSpecsModal
         visible={specsVisible}

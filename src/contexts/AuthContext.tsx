@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { login as loginRequest, LoginPayload, signup as signupRequest, SignupPayload } from '@/services/auth';
+import { updateUserProfile } from '@/services/users';
 import { User } from '@/types/api';
 import {
   deleteSecureItem,
@@ -16,6 +17,7 @@ type AuthContextValue = {
   login: (payload: LoginPayload) => Promise<void>;
   signup: (payload: SignupPayload) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (updates: { username?: string; email?: string; phone?: string }) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -67,6 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await deleteSecureItem(SECURE_KEYS.authUser);
   }, []);
 
+  const updateProfile = useCallback(async (updates: { username?: string; email?: string; phone?: string }) => {
+    const updatedUser = await updateUserProfile(updates);
+    setUser(updatedUser);
+    await setSecureItem(SECURE_KEYS.authUser, JSON.stringify(updatedUser));
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
@@ -76,8 +84,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       signup,
       logout,
+      updateProfile,
     }),
-    [isLoading, login, logout, signup, token, user],
+    [isLoading, login, logout, signup, token, user, updateProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
