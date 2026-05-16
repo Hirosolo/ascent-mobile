@@ -139,12 +139,19 @@ export function WorkoutScreen() {
           })),
         );
       }
+      
+      return created;
     },
-    onSuccess: () => {
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["workouts", monthKey] }),
-        queryClient.invalidateQueries({ queryKey: ["summary", monthKey] }),
-      ]);
+    onSuccess: (created) => {
+      // Update React Query cache immediately without refetching
+      queryClient.setQueryData(["workouts", monthKey], (oldData?: WorkoutSession[]) => {
+        if (!oldData) return [created];
+        return [...oldData, created];
+      });
+      
+      // Invalidate summary to update progress
+      void queryClient.invalidateQueries({ queryKey: ["summary", monthKey] });
+      
       setIsCreateModalOpen(false);
       setCreateStep(1);
       setCreateNote("");
@@ -241,11 +248,15 @@ export function WorkoutScreen() {
 
   const deleteSessionMutation = useMutation({
     mutationFn: (sessionId: number) => deleteWorkout(sessionId),
-    onSuccess: () => {
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["workouts", monthKey] }),
-        queryClient.invalidateQueries({ queryKey: ["summary", monthKey] }),
-      ]);
+    onSuccess: (_, sessionId) => {
+      // Update React Query cache immediately without refetching
+      queryClient.setQueryData(["workouts", monthKey], (oldData?: WorkoutSession[]) => {
+        if (!oldData) return [];
+        return oldData.filter((w) => w.session_id !== sessionId);
+      });
+      
+      // Invalidate summary to update progress
+      void queryClient.invalidateQueries({ queryKey: ["summary", monthKey] });
     },
     onError: (error) => {
       const message =

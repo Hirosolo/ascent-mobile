@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { differenceInCalendarDays, format } from 'date-fns';
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { Screen } from '@/components/ui/Screen';
@@ -21,7 +21,7 @@ import { calculateGoalTargets, fetchLatestMetrics, saveNutritionGoalTargets, sav
 import { getSummary } from '@/services/summary';
 import { getCurrentUser } from '@/services/users';
 import { colors } from '@/theme/tokens';
-import type { GoalCalculationParams, GoalCalculationResult, MetricData } from '@/types/api';
+import type { GoalCalculationParams, GoalCalculationResult, MetricData, User } from '@/types/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -153,12 +153,12 @@ function EditProfileModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (updatedUser: User) => void;
   initialUsername?: string;
   initialEmail?: string;
   initialPhone?: string;
 }) {
-  const { updateProfile } = useAuth();
+  const { updateProfile, user: contextUser } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -208,7 +208,10 @@ function EditProfileModal({
         email: form.email || undefined,
         phone: form.phone || undefined,
       });
-      onSuccess?.();
+      // Pass the updated user from context to onSuccess
+      if (contextUser) {
+        onSuccess?.(contextUser);
+      }
       onClose();
     } catch (err: any) {
       setError(err?.message ?? 'Failed to update profile');
@@ -747,6 +750,7 @@ function SetGoalModal({
 
 export function ProfileScreen() {
   const today = new Date();
+  const queryClient = useQueryClient();
   const { user, logout } = useAuth();
   const userQuery = useQuery({ queryKey: ['me'], queryFn: getCurrentUser });
   const summaryQuery = useQuery({
@@ -1018,8 +1022,9 @@ export function ProfileScreen() {
         initialUsername={profile?.username ?? profile?.fullname}
         initialEmail={profile?.email}
         initialPhone={profile?.phone}
-        onSuccess={() => {
-          void userQuery.refetch();
+        onSuccess={(updatedUser) => {
+          // Update React Query cache immediately with the returned user data
+          queryClient.setQueryData(['me'], updatedUser);
           Alert.alert('Success', 'Your profile has been updated.');
         }}
       />

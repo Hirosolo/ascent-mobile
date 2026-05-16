@@ -69,6 +69,54 @@ async function invalidateWorkoutMonthCache(month: string): Promise<void> {
   await AsyncStorage.multiRemove([keys.data, keys.fetched]);
 }
 
+async function updateWorkoutsMonthCacheAfterCreate(month: string, workout: WorkoutSession): Promise<void> {
+  const userId = await getCacheUserId();
+  const keys = buildWorkoutsMonthCacheKeys(month, userId);
+  const current = await AsyncStorage.getItem(keys.data);
+  if (!current) return;
+
+  try {
+    const parsed = JSON.parse(current) as WorkoutSession[];
+    parsed.push(workout);
+    await AsyncStorage.setItem(keys.data, JSON.stringify(parsed));
+  } catch {
+    await AsyncStorage.removeItem(keys.data);
+  }
+}
+
+async function updateWorkoutsMonthCacheAfterUpdate(month: string, updatedWorkout: WorkoutSession): Promise<void> {
+  const userId = await getCacheUserId();
+  const keys = buildWorkoutsMonthCacheKeys(month, userId);
+  const current = await AsyncStorage.getItem(keys.data);
+  if (!current) return;
+
+  try {
+    const parsed = JSON.parse(current) as WorkoutSession[];
+    const index = parsed.findIndex((w) => w.session_id === updatedWorkout.session_id);
+    if (index >= 0) {
+      parsed[index] = updatedWorkout;
+      await AsyncStorage.setItem(keys.data, JSON.stringify(parsed));
+    }
+  } catch {
+    await AsyncStorage.removeItem(keys.data);
+  }
+}
+
+async function updateWorkoutsMonthCacheAfterDelete(month: string, sessionId: number): Promise<void> {
+  const userId = await getCacheUserId();
+  const keys = buildWorkoutsMonthCacheKeys(month, userId);
+  const current = await AsyncStorage.getItem(keys.data);
+  if (!current) return;
+
+  try {
+    const parsed = JSON.parse(current) as WorkoutSession[];
+    const next = parsed.filter((w) => w.session_id !== sessionId);
+    await AsyncStorage.setItem(keys.data, JSON.stringify(next));
+  } catch {
+    await AsyncStorage.removeItem(keys.data);
+  }
+}
+
 export async function getWorkouts(month = format(new Date(), 'yyyy-MM'), forceRefresh = false): Promise<WorkoutSession[]> {
   const userId = await getCacheUserId();
   const today = getTodayCacheDate();
@@ -238,7 +286,9 @@ export async function createWorkout(payload: {
     method: 'POST',
     body: JSON.stringify(payload),
   });
-  await invalidateWorkoutRelatedCaches(payload.scheduled_date.slice(0, 7));
+  const month = payload.scheduled_date.slice(0, 7);
+  await updateWorkoutsMonthCacheAfterCreate(month, created);
+  await invalidateSummaryCache(month);
   return created;
 }
 
@@ -263,7 +313,13 @@ export async function updateWorkout(
     method: 'PUT',
     body: JSON.stringify(payload),
   });
-  await invalidateWorkoutRelatedCaches(payload.scheduled_date?.slice(0, 7));
+  const month = payload.scheduled_date?.slice(0, 7);
+  if (month) {
+    await updateWorkoutsMonthCacheAfterUpdate(month, updated);
+    await invalidateSummaryCache(month);
+  } else {
+    await invalidateWorkoutRelatedCaches();
+  }
   return updated;
 }
 
@@ -338,6 +394,12 @@ export async function deleteWorkout(sessionId: number): Promise<{ success: boole
   const result = await apiFetch<{ success: boolean }>(`/workouts/${sessionId}`, {
     method: 'DELETE',
   });
-  await invalidateWorkoutRelatedCaches();
+  // Delete from all months by invalidating entire workout cache
+  await invalidateAllWorkoutCaches();
+  await invalidateAllSummaryCaches();
   return result;
 }
+
+// ─── Cache Update Helpers ───────────────────────────────────────────────────────
+
+export { updateWorkoutsMonthCacheAfterCreate, updateWorkoutsMonthCacheAfterUpdate, updateWorkoutsMonthCacheAfterDelete };

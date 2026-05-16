@@ -34,7 +34,6 @@ import {
   NormalisedMeal,
   reduceDailyMacros,
   updateMealsMonthCacheAfterCreate,
-  updateMealsMonthCacheAfterDelete,
 } from '@/services/nutrition';
 import { colors } from '@/theme/tokens';
 
@@ -377,8 +376,7 @@ export function NutritionScreen() {
 
   async function removeMeal(meal: NormalisedMeal) {
     try {
-      await deleteMeal(meal.meal_id);
-      await updateMealsMonthCacheAfterDelete(currentMonth, meal.meal_id);
+      await deleteMeal(meal.meal_id, currentMonth);
       setSelectedMeal(null);
       setSelectedMealFoods([]);
       setExpandedFoodRows({});

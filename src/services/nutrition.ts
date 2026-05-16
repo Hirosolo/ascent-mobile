@@ -488,13 +488,19 @@ export function createMeal(payload: {
   });
 }
 
-export function deleteMeal(mealId: number): Promise<{ message?: string }> {
-  return apiFetch<{ message?: string }>(`/meals/${mealId}`, {
+export async function deleteMeal(mealId: number, month?: string): Promise<{ message?: string }> {
+  const result = await apiFetch<{ message?: string }>(`/meals/${mealId}`, {
     method: 'DELETE',
-  }).then(async (result) => {
-    await invalidateAllSummaryCaches();
-    return result;
   });
+  
+  if (month) {
+    await updateMealsMonthCacheAfterDelete(month, mealId);
+    await invalidateSummaryCache(month);
+  } else {
+    await invalidateAllSummaryCaches();
+  }
+  
+  return result;
 }
 
 export async function getMealDetail(mealId: number): Promise<MealDetail> {

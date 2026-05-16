@@ -63,13 +63,21 @@ export function PlanDayManagerScreen() {
       };
 
       if (editingPlanId) {
-        await updateWorkoutDayPlan(editingPlanId, payload);
+        return await updateWorkoutDayPlan(editingPlanId, payload);
       } else {
-        await createWorkoutDayPlan(payload);
+        return await createWorkoutDayPlan(payload);
       }
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workout-day-plans'] });
+    onSuccess: (created) => {
+      // Update React Query cache immediately
+      queryClient.setQueryData(['workout-day-plans'], (oldData?: WorkoutDayPlan[]) => {
+        if (!oldData) return [created];
+        if (editingPlanId) {
+          return oldData.map((p) => (p.plan_id === editingPlanId ? created : p));
+        }
+        return [...oldData, created];
+      });
+      
       setMode('list');
       setEditingPlanId(null);
       setName('');
@@ -87,8 +95,13 @@ export function PlanDayManagerScreen() {
 
   const deleteMutation = useMutation({
     mutationFn: (planId: number) => deleteWorkoutDayPlan(planId),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['workout-day-plans'] });
+    onSuccess: (_, planId) => {
+      // Update React Query cache immediately
+      queryClient.setQueryData(['workout-day-plans'], (oldData?: WorkoutDayPlan[]) => {
+        if (!oldData) return [];
+        return oldData.filter((p) => p.plan_id !== planId);
+      });
+      
       setMode('list');
       setEditingPlanId(null);
       Alert.alert('Deleted', 'Plan day deleted successfully.');

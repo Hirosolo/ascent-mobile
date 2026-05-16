@@ -12,6 +12,7 @@ export type User = {
   fullname?: string;
   email: string;
   phone?: string;
+  phone_number?: string;
   created_at?: string;
 };
 

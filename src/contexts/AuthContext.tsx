@@ -9,6 +9,14 @@ import {
   setSecureItem,
 } from '@/lib/storage/secure';
 
+function normalizeUser(user: User): User {
+  // Map phone_number to phone if present
+  if (user.phone_number && !user.phone) {
+    user.phone = user.phone_number;
+  }
+  return user;
+}
+
 type AuthContextValue = {
   user: User | null;
   token: string | null;
@@ -37,7 +45,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (mounted && storedToken) {
           setToken(storedToken);
-          if (storedUser) setUser(JSON.parse(storedUser) as User);
+          if (storedUser) {
+            const user = normalizeUser(JSON.parse(storedUser) as User);
+            setUser(user);
+          }
         }
       } finally {
         if (mounted) setIsLoading(false);
@@ -52,10 +63,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(async (payload: LoginPayload) => {
     const result = await loginRequest(payload);
+    const normalizedUser = normalizeUser(result.user);
     setToken(result.token);
-    setUser(result.user);
+    setUser(normalizedUser);
     await setSecureItem(SECURE_KEYS.authToken, result.token);
-    await setSecureItem(SECURE_KEYS.authUser, JSON.stringify(result.user));
+    await setSecureItem(SECURE_KEYS.authUser, JSON.stringify(normalizedUser));
   }, []);
 
   const signup = useCallback(async (payload: SignupPayload) => {
@@ -71,8 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateProfile = useCallback(async (updates: { username?: string; email?: string; phone?: string }) => {
     const updatedUser = await updateUserProfile(updates);
-    setUser(updatedUser);
-    await setSecureItem(SECURE_KEYS.authUser, JSON.stringify(updatedUser));
+    const normalizedUser = normalizeUser(updatedUser);
+    setUser(normalizedUser);
+    await setSecureItem(SECURE_KEYS.authUser, JSON.stringify(normalizedUser));
   }, []);
 
   const value = useMemo<AuthContextValue>(
