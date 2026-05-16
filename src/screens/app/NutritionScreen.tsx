@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Svg, { Circle } from 'react-native-svg';
-import { addDays, format, subDays } from 'date-fns';
+import { addDays, format, startOfWeek, subDays } from 'date-fns';
 import { showSystemNotification } from '@/lib/notifications';
 import { Screen } from '@/components/ui/Screen';
 import {
@@ -228,15 +228,31 @@ export function NutritionScreen() {
   const [selectedFoods, setSelectedFoods] = useState<SelectedFood[]>([]);
   const [servingDrafts, setServingDrafts] = useState<Record<number, string>>({});
   const [submittingMeal, setSubmittingMeal] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const currentMonth = format(selectedDate, 'yyyy-MM');
 
   const weekDays = useMemo(() => {
+    const start = startOfWeek(selectedDate, { weekStartsOn: 1 }); // Start on Monday
     const days: Date[] = [];
-    for (let i = -3; i <= 3; i += 1) days.push(addDays(selectedDate, i));
+    // Show 14 days (previous week + current week)
+    const base = addDays(start, -7);
+    for (let i = 0; i < 21; i += 1) {
+      days.push(addDays(base, i));
+    }
     return days;
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      const index = weekDays.findIndex((d) => format(d, 'yyyy-MM-dd') === dateStr);
+      if (index !== -1) {
+        // Approximate day button width (48) + gap (10)
+        scrollRef.current.scrollTo({ x: index * 58 - 80, animated: true });
+      }
+    }
+  }, [dateStr, weekDays]);
 
   const selectedFoodIds = useMemo(() => new Set(selectedFoods.map((f) => f.food_id)), [selectedFoods]);
 
@@ -539,7 +555,12 @@ export function NutritionScreen() {
         </View>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.dateStrip}
+      >
         {weekDays.map((day) => {
           const active = format(day, 'yyyy-MM-dd') === dateStr;
           return (
@@ -1148,10 +1169,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dateStrip: {
-    gap: 8,
-    color: colors.textPrimary,
-    fontSize: 16,
+    gap: 10,
+    paddingVertical: 4,
+  },
+  dayBtn: {
+    width: 48,
+    height: 62,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  dayBtnActive: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(59,130,246,0.12)',
+  },
+  dayLabel: {
+    color: colors.textDim,
+    fontSize: 9,
     fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  dayLabelActive: {
+    color: colors.primary,
+  },
+  dayNumber: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 18,
+    fontWeight: '900',
   },
   dayNumberActive: {
     color: '#fff',
