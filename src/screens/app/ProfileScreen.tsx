@@ -18,6 +18,7 @@ import Svg, { Circle, G, Line, Rect, Text as SvgText } from 'react-native-svg';
 import { Screen } from '@/components/ui/Screen';
 import { useAuth } from '@/contexts/AuthContext';
 import { calculateGoalTargets, fetchLatestMetrics, saveNutritionGoalTargets, saveUserMetric } from '@/services/nutrition';
+import { showSystemNotification } from '@/lib/notifications';
 import { getSummary } from '@/services/summary';
 import { getCurrentUser } from '@/services/users';
 import { colors } from '@/theme/tokens';
@@ -686,16 +687,6 @@ function SetGoalModal({
                   ))}
                 </View>
 
-                <View style={[modal.statCard, { flexDirection: 'row', alignItems: 'center', gap: 10,
-                  backgroundColor: 'rgba(6,182,212,0.08)', borderColor: 'rgba(6,182,212,0.22)' }]}>
-                  <MaterialCommunityIcons color="#06b6d4" name="water" size={20} />
-                  <View>
-                    <Text style={modal.statLabel}>Hydration Target</Text>
-                    <Text style={[modal.statValue, { color: '#06b6d4' }]}>
-                      {(calcResult.hydration_ml / 1000).toFixed(1)}<Text style={modal.statUnit}> L/day</Text>
-                    </Text>
-                  </View>
-                </View>
               </>
             ) : null}
           </ScrollView>
@@ -805,6 +796,13 @@ export function ProfileScreen() {
     if (!selectedRecordName) return filteredRecords[0] ?? allRecords[0] ?? null;
     return allRecords.find((record) => record.name === selectedRecordName) ?? null;
   }, [allRecords, filteredRecords, selectedRecordName]);
+
+  const handleSendNotification = useCallback(() => {
+    void showSystemNotification(
+      'Ascent notification',
+      'This is a system notification. Tap it to reopen the app or swipe it away from the notification shade.',
+    );
+  }, []);
 
   return (
     <Screen scroll contentStyle={styles.screen}>
@@ -926,13 +924,13 @@ export function ProfileScreen() {
 
         <View style={styles.divider} />
 
-        <Pressable style={styles.actionRow}>
+        <Pressable style={styles.actionRow} onPress={handleSendNotification}>
           <View style={styles.actionIconBox}>
             <MaterialCommunityIcons color={colors.textDim} name="bell-outline" size={20} />
           </View>
           <View style={styles.actionText}>
             <Text style={styles.actionTitle}>Notifications</Text>
-            <Text style={styles.actionSub}>Enabled</Text>
+            <Text style={styles.actionSub}>Send a test system notification</Text>
           </View>
           <MaterialCommunityIcons color={colors.textDim} name="chevron-right" size={20} />
         </Pressable>

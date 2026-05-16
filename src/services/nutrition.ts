@@ -253,10 +253,6 @@ function buildGoalDateCacheKey(dateStr: string, userId: string) {
   return `goal_date_${dateStr}_${userId}`;
 }
 
-function buildWaterDateCacheKey(dateStr: string, userId: string) {
-  return `water_date_${dateStr}_${userId}`;
-}
-
 function parseDateKey(logDate: string): string {
   return (logDate || '').slice(0, 10);
 }
@@ -286,7 +282,7 @@ export function normaliseMeals(rawMeals: ApiMeal[]): NormalisedMeal[] {
   });
 }
 
-export function reduceDailyMacros(meals: NormalisedMeal[], waterMl: number): MacroTotals {
+export function reduceDailyMacros(meals: NormalisedMeal[]): MacroTotals {
   const totals = meals.reduce<MacroTotals>(
     (acc, meal) => ({
       calories: acc.calories + meal.calories,
@@ -294,12 +290,11 @@ export function reduceDailyMacros(meals: NormalisedMeal[], waterMl: number): Mac
       carbs: acc.carbs + meal.carbs,
       fats: acc.fats + meal.fats,
       fiber: acc.fiber + meal.fiber,
-      water: acc.water,
+      water: 0,
     }),
-    { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, water: waterMl },
+    { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0, water: 0 },
   );
 
-  totals.water = waterMl;
   return totals;
 }
 
@@ -386,46 +381,14 @@ export async function updateMealsMonthCacheAfterDelete(month: string, mealId: nu
   }
 }
 
-export async function fetchWaterDaily(dateStr: string, forceRefresh = false): Promise<WaterResponse> {
-  const userId = await getCacheUserId();
-  const key = buildWaterDateCacheKey(dateStr, userId);
-
-  if (forceRefresh) {
-    await AsyncStorage.removeItem(key);
-  }
-
-  const cached = await AsyncStorage.getItem(key);
-  if (cached) {
-    try {
-      return JSON.parse(cached) as WaterResponse;
-    } catch {
-      await AsyncStorage.removeItem(key);
-    }
-  }
-
-  const response = await apiFetch<WaterResponse>(`/nutrition/water?date=${dateStr}`);
-  await AsyncStorage.setItem(key, JSON.stringify(response));
-  return response;
-}
-
 export async function invalidateDailyCaches(dateStr: string, month: string): Promise<void> {
   const userId = await getCacheUserId();
   const goalKey = buildGoalDateCacheKey(dateStr, userId);
-  const waterKey = buildWaterDateCacheKey(dateStr, userId);
   const mealsKeys = buildMealMonthCacheKeys(month, userId);
-  await AsyncStorage.multiRemove([goalKey, waterKey, mealsKeys.data, mealsKeys.fetched]);
+  await AsyncStorage.multiRemove([goalKey, mealsKeys.data, mealsKeys.fetched]);
 }
 
-export async function logWater(amount_ml: number, date: string): Promise<void> {
-  await apiFetch('/nutrition/water', {
-    method: 'POST',
-    body: JSON.stringify({ amount_ml, date }),
-  });
-
-  const userId = await getCacheUserId();
-  await AsyncStorage.removeItem(buildWaterDateCacheKey(date, userId));
-  await invalidateSummaryCache(date.slice(0, 7));
-}
+// (logWater function removed)
 
 export async function fetchFoods(searchQuery = ''): Promise<FoodItem[]> {
   const userId = await getCacheUserId();

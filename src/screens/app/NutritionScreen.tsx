@@ -16,6 +16,7 @@ import {
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Svg, { Circle } from 'react-native-svg';
 import { addDays, format, subDays } from 'date-fns';
+import { showSystemNotification } from '@/lib/notifications';
 import { Screen } from '@/components/ui/Screen';
 import {
   createMeal,
@@ -23,12 +24,10 @@ import {
   fetchFoods,
   fetchMealsByDate,
   fetchNutritionGoal,
-  fetchWaterDaily,
   FoodItem,
   getMealDetail,
   getMealDetailsFallback,
   invalidateDailyCaches,
-  logWater,
   MacroTotals,
   MealFoodItem,
   NormalisedMeal,
@@ -37,13 +36,29 @@ import {
 } from '@/services/nutrition';
 import { colors } from '@/theme/tokens';
 
+const NUTRITION_MESSAGES = [
+  '🍏 Perfect fueling! Your body will thank you.',
+  '🥩 High-quality macros detected. Great choice!',
+  '🥗 Consistency is key. Another meal logged!',
+  '🔥 Fueling the fire! Keep up the good work.',
+  '✨ Nutrients locked in! Optimization complete.',
+  '🥑 Great meal! You are crushing your goals.',
+  '🍗 Protein power! Building that engine.',
+  '🍚 Clean fuel only! Superior performance incoming.',
+  '💪 Nutrition on point! Stay disciplined.',
+  '🌟 Every meal counts. Great job logging!',
+];
+
+function getRandomNutritionMotivation(): string {
+  return NUTRITION_MESSAGES[Math.floor(Math.random() * NUTRITION_MESSAGES.length)];
+}
+
 type GoalTargets = {
   calories: number;
   protein: number;
   carbs: number;
   fats: number;
   fiber: number;
-  water: number;
 };
 
 type MealGroupName = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks' | 'Supplements' | 'Other';
@@ -185,7 +200,6 @@ export function NutritionScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const errorAnim = useRef(new Animated.Value(120)).current;
-  const waterAnim = useRef(new Animated.Value(0)).current;
 
   const [goals, setGoals] = useState<GoalTargets>({
     calories: 2200,
@@ -193,7 +207,6 @@ export function NutritionScreen() {
     carbs: 220,
     fats: 70,
     fiber: 28,
-    water: 2500,
   });
 
   const [macros, setMacros] = useState<MacroTotals>({
@@ -202,7 +215,6 @@ export function NutritionScreen() {
     carbs: 0,
     fats: 0,
     fiber: 0,
-    water: 0,
   });
 
   const [detailLoading, setDetailLoading] = useState(false);
@@ -216,7 +228,6 @@ export function NutritionScreen() {
   const [selectedFoods, setSelectedFoods] = useState<SelectedFood[]>([]);
   const [servingDrafts, setServingDrafts] = useState<Record<number, string>>({});
   const [submittingMeal, setSubmittingMeal] = useState(false);
-  const [customWater, setCustomWater] = useState('');
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const currentMonth = format(selectedDate, 'yyyy-MM');
@@ -265,14 +276,6 @@ export function NutritionScreen() {
     void loadDailyData(false);
   }, [dateStr]);
 
-  useEffect(() => {
-    Animated.spring(waterAnim, {
-      toValue: clampPercent(macros.water, goals.water),
-      useNativeDriver: false,
-      damping: 20,
-      stiffness: 50,
-    }).start();
-  }, [goals.water, macros.water, waterAnim]);
 
   useEffect(() => {
     if (!errorMessage) return;
@@ -292,10 +295,9 @@ export function NutritionScreen() {
         await invalidateDailyCaches(dateStr, currentMonth);
       }
 
-      const [goalData, mealData, waterData] = await Promise.all([
+      const [goalData, mealData] = await Promise.all([
         fetchNutritionGoal(dateStr, forceRefresh),
         fetchMealsByDate(dateStr, currentMonth, forceRefresh),
-        fetchWaterDaily(dateStr, forceRefresh),
       ]);
 
       const nextGoals: GoalTargets = {
@@ -304,10 +306,9 @@ export function NutritionScreen() {
         carbs: toNumber((goalData as any).carbs_target_g),
         fats: toNumber((goalData as any).fat_target_g),
         fiber: toNumber((goalData as any).fiber_target_g ?? 28),
-        water: toNumber((goalData as any).hydration_target_ml),
       };
 
-      const merged = reduceDailyMacros(mealData, toNumber(waterData.total_ml));
+      const merged = reduceDailyMacros(mealData);
 
       setGoals((prev) => ({
         ...prev,
@@ -316,7 +317,6 @@ export function NutritionScreen() {
         carbs: nextGoals.carbs || prev.carbs,
         fats: nextGoals.fats || prev.fats,
         fiber: nextGoals.fiber || prev.fiber,
-        water: nextGoals.water || prev.water,
       }));
       setMeals(mealData);
       setMacros(merged);
@@ -334,18 +334,6 @@ export function NutritionScreen() {
     await loadDailyData(true);
   }
 
-  async function executeAddWater(amount: number) {
-    if (!amount || amount <= 0) return;
-
-    try {
-      await logWater(amount, dateStr);
-      await loadDailyData(false);
-      setCustomWater('');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to log water';
-      setErrorMessage(message);
-    }
-  }
 
   async function openMealDetail(meal: NormalisedMeal) {
     setSelectedMeal(meal);
@@ -466,9 +454,7 @@ export function NutritionScreen() {
       setNotes('');
       await loadDailyData(false);
 
-      if (stubName.length === 0) {
-        setErrorMessage('Meal logged');
-      }
+      void showSystemNotification(`${mealType} Logged! 🍽️`, getRandomNutritionMotivation());
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create meal';
       setErrorMessage(message);
@@ -1253,134 +1239,6 @@ const styles = StyleSheet.create({
   progressFillBar: {
     height: '100%',
     borderRadius: 999,
-  },
-  waterCard: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 26,
-    padding: 18,
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#0c0c0c',
-    overflow: 'hidden',
-  },
-  waterHeroIcon: {
-    position: 'absolute',
-    right: 16,
-    top: 12,
-  },
-  waterTitle: {
-    color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 2.4,
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  waterCircle: {
-    width: 136,
-    height: 136,
-    borderRadius: 68,
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#111',
-  },
-  waterFill: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(59,130,246,0.45)',
-  },
-  waterCenter: {
-    alignItems: 'center',
-  },
-  waterValue: {
-    color: colors.textPrimary,
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  waterGoal: {
-    color: colors.textDim,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  waterMetaRow: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  waterMetaText: {
-    color: 'rgba(255,255,255,0.42)',
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  waterProgressTrack: {
-    width: '100%',
-    height: 6,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  waterProgressFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-  },
-  waterPresetRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  waterPresetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  waterPresetLabel: {
-    color: colors.textPrimary,
-    fontWeight: '700',
-  },
-  customWaterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    gap: 8,
-  },
-  customWaterInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    color: colors.textPrimary,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-  },
-  customWaterAdd: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  waterStatus: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
   sectionHeader: {
     marginTop: 2,

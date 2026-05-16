@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { PrimaryButton } from '@/components/ui/PrimaryButton';
 import { Screen } from '@/components/ui/Screen';
+import { showSystemNotification } from '@/lib/notifications';
 import {
   addExercisesToWorkout,
   createExerciseLog,
@@ -34,6 +35,23 @@ type EditableSet = {
   completed: boolean;
 };
 
+const MOTIVATION_MESSAGES = [
+  '🎉 Incredible workout! You crushed it!',
+  '💪 Amazing effort! Keep pushing!',
+  '⭐ Fantastic session! You\'re unstoppable!',
+  '🔥 Wow! That was an impressive workout!',
+  '✨ Excellent work! You earned this!',
+  '🚀 You\'re on fire! Great job!',
+  '🏆 Champion level performance!',
+  '💯 Perfect execution! Well done!',
+  '🌟 You killed that workout!',
+  '🎯 Stay focused, you\'re doing amazing!',
+];
+
+function getRandomMotivation(): string {
+  return MOTIVATION_MESSAGES[Math.floor(Math.random() * MOTIVATION_MESSAGES.length)];
+}
+
 export function WorkoutDetailScreen() {
   const route = useRoute<RouteProp<RootStackParams, 'WorkoutDetail'>>();
   const navigation = useNavigation<any>();
@@ -53,6 +71,7 @@ export function WorkoutDetailScreen() {
   const [setState, setSetState] = useState<Record<number, EditableSet[]>>({});
   const [isAddExerciseOpen, setIsAddExerciseOpen] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  const workoutCompletedRef = useRef(false);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -102,6 +121,8 @@ export function WorkoutDetailScreen() {
         return sets.length > 0 && sets.every((s) => s.completed);
       });
 
+      workoutCompletedRef.current = allDone;
+
       if (allDone) {
         await updateWorkout(sessionId, { status: 'COMPLETED' });
       } else {
@@ -114,7 +135,11 @@ export function WorkoutDetailScreen() {
         queryClient.invalidateQueries({ queryKey: ['workouts'] }),
         queryClient.invalidateQueries({ queryKey: ['summary'] }),
       ]);
-      Alert.alert('Saved', 'Workout updates have been synced.');
+      if (workoutCompletedRef.current) {
+        void showSystemNotification('Workout Complete! 💪', getRandomMotivation());
+      } else {
+        Alert.alert('Saved', 'Workout updates have been synced.');
+      }
     },
     onError: (error) => {
       const message = error instanceof Error ? error.message : 'Failed to save workout changes';

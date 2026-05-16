@@ -31,7 +31,6 @@ type SummaryPoint = {
   fiber: number;
   sugar: number;
   gr: number;
-  water: number;
 };
 
 type SeriesConfig<T> = {
@@ -48,7 +47,6 @@ const CHART_COLORS = {
   fats: "#ec4899",
   fiber: "#22c55e",
   sugar: "#ef4444",
-  water: "#06b6d4",
 };
 
 type NutritionKey = "kcal" | "protein" | "carbs" | "fats" | "fiber" | "sugar";
@@ -304,12 +302,12 @@ export function SummaryScreen() {
           fiber: toNumber(serverDay?.fiber),
           sugar: toNumber(serverDay?.sugar),
           gr: toNumber(serverDay?.gr),
-          water: toNumber(serverDay?.water),
         });
       }
 
       setDataset(nextDataset);
-    } catch {
+    } catch (err) {
+      console.error("[SummaryScreen] Error loading summary:", err);
       setDataset([]);
     } finally {
       setIsLoadingSummary(false);

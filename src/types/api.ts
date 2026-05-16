@@ -93,7 +93,6 @@ export type SummaryData = {
     fiber?: number;
     sugar?: number;
     gr: number;
-    water?: number;
   }>;
   exercise_data?: Array<{
     name: string;
@@ -108,7 +107,6 @@ export type NutritionGoal = {
   protein_target_g: number;
   carbs_target_g: number;
   fat_target_g: number;
-  hydration_target_ml: number;
 };
 
 export type MetricData = {
@@ -133,7 +131,6 @@ export type GoalCalculationResult = {
   protein_g: number;
   fat_g: number;
   carbs_g: number;
-  hydration_ml: number;
 };
 
 export type Program = {
