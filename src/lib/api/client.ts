@@ -1,7 +1,7 @@
 import { ApiEnvelope } from '@/types/api';
 import { getSecureItem, SECURE_KEYS } from '@/lib/storage/secure';
 
-const API_BASE = 'https://traindiary-refactor-backend.vercel.app/api';
+const API_BASE = 'https://ascent-backend-j6ke.vercel.app/api';
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getSecureItem(SECURE_KEYS.authToken);
