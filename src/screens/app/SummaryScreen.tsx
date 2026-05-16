@@ -490,23 +490,6 @@ export function SummaryScreen() {
         </View>
       </View>
 
-      <View style={styles.insightCard}>
-        <View style={styles.insightIconBox}>
-          <MaterialCommunityIcons
-            color={colors.primary}
-            name="flash"
-            size={20}
-          />
-        </View>
-        <View style={styles.insightTextWrap}>
-          <Text style={styles.insightTitle}>Peak Performance Detected</Text>
-          <Text style={styles.insightBody}>
-            Protein intake is consistent. Recovery scores are higher than
-            average this week.
-          </Text>
-        </View>
-      </View>
-
       <PeriodWheelPicker
         visible={isPickerOpen}
         onClose={() => setIsPickerOpen(false)}
@@ -768,37 +751,6 @@ const styles = StyleSheet.create({
   },
   legendTextInactive: {
     color: "rgba(255,255,255,0.25)",
-  },
-  insightCard: {
-    borderWidth: 1,
-    borderColor: "rgba(59,130,246,0.2)",
-    backgroundColor: "rgba(15,17,21,0.65)",
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-    borderRadius: 14,
-    padding: 12,
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "flex-start",
-  },
-  insightIconBox: {
-    backgroundColor: "rgba(59,130,246,0.18)",
-    borderRadius: 10,
-    padding: 8,
-  },
-  insightTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  insightTitle: {
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: "800",
-  },
-  insightBody: {
-    color: "rgba(255,255,255,0.6)",
-    fontSize: 12,
-    lineHeight: 17,
   },
   loadingOverlay: {
     paddingVertical: 4,

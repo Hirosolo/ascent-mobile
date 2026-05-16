@@ -669,15 +669,6 @@ export function ProfileScreen() {
           </View>
         </View>
         <Text style={styles.displayName}>{displayName}</Text>
-        <View style={styles.tierRow}>
-          <Text style={styles.memberText}>
-            A member from {daysJoined === '-' ? 'today' : `${daysJoined} days`}
-          </Text>
-        </View>
-        <View style={styles.statusPill}>
-          <View style={styles.statusDot} />
-          <Text style={styles.statusText}>Active Status: Connected</Text>
-        </View>
       </View>
 
       <View style={styles.statsGrid}>
@@ -956,42 +947,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 30,
     fontWeight: '800',
-  },
-  tierRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
-  },
-  memberText: {
-    color: '#94a3b8',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  statusPill: {
-    marginTop: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    borderRadius: 999,
-    backgroundColor: 'rgba(60,131,246,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(60,131,246,0.3)',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-  },
-  statusText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
   },
   statsGrid: {
     flexDirection: 'row',
